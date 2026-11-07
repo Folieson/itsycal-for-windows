@@ -1,6 +1,6 @@
-# Itsycal for Windows
+﻿# Itsycal for Windows
 
-A calendar for the **Windows PowerToys Command Palette Dock** вЂ” the closest Windows
+A calendar for the **Windows PowerToys Command Palette Dock** РІР‚вЂќ the closest Windows
 equivalent of [ItsyCal](https://github.com/sfsam/itsycal)'s menu-bar calendar.
 
 This repository contains the Windows application only. It is derived from the MIT-licensed
@@ -10,17 +10,17 @@ fork relation is kept for attribution and history, not for shared code.
 
 ## Features
 
-- **Date in the Dock** вЂ” an always-visible band at the screen edge showing today's date,
+- **Date in the Dock** РІР‚вЂќ an always-visible band at the screen edge showing today's date,
   refreshed automatically across midnight.
-- **Month calendar** вЂ” one click opens a flyout with a 6Г—7 month grid, today highlighted,
+- **Month calendar** РІР‚вЂќ one click opens a flyout with a 6Р“вЂ”7 month grid, today highlighted,
   adjacent-month days dimmed, and previous/next/today navigation.
-- **Day selection** вЂ” click a day to see that day's events; the selected day is highlighted.
-- **Events** вЂ” read-only events from the local Windows calendar, with time ranges, location,
+- **Day selection** РІР‚вЂќ click a day to see that day's events; the selected day is highlighted.
+- **Events** РІР‚вЂќ read-only events from the local Windows calendar, with time ranges, location,
   all-day and multi-day handling; the calendar keeps working when no calendar is configured.
-- **ISO week numbers** вЂ” optional week-number column (ISO-8601).
-- **Settings** вЂ” dock date format, event indicator, first day of the week, week numbers,
+- **ISO week numbers** РІР‚вЂќ optional week-number column (ISO-8601).
+- **Settings** РІР‚вЂќ dock date format, event indicator, first day of the week, week numbers,
   applied without restarting the extension.
-- **Private by design** вЂ” no network calls, no telemetry, calendar data never leaves the
+- **Private by design** РІР‚вЂќ no network calls, no telemetry, calendar data never leaves the
   machine.
 
 ## Requirements
@@ -35,29 +35,27 @@ required.
 
 ## Install
 
-The current public build is the **1.0.0 development pre-release** вЂ” a signed MSIX for x64
-and ARM64 that is self-contained (it carries its own .NET runtime, no separate installation
-needed):
+The current public build is a **development pre-release** — a signed MSIX for x64 and ARM64
+that is self-contained (it carries its own .NET runtime, no separate installation needed):
 
-1. Download `ItsycalForWindows_1.0.0.0_x64.msix` (or the `_arm64.msix` file) and
-   `ItsycalForWindows_1.0.0.0_dev.cer` from the
-   [v1.0.0 release](https://github.com/Folieson/itsycal-for-windows/releases/tag/v1.0.0).
+1. Open the [releases page](https://github.com/Folieson/itsycal-for-windows/releases) and
+   download the newest x64 (or arm64) MSIX together with its matching `_dev.cer`.
 2. From an **elevated** PowerShell, trust the development certificate once and register the
    package:
 
    ```powershell
-   Import-Certificate -FilePath .\ItsycalForWindows_1.0.0.0_dev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
-   Add-AppxPackage -Path .\ItsycalForWindows_1.0.0.0_x64.msix
+   Import-Certificate -FilePath .\ItsycalForWindows_<version>_dev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
+   Add-AppxPackage -Path .\ItsycalForWindows_<version>_x64.msix
    ```
 
-3. Open **Command Palette в†’ Dock settings** and enable the **Itsycal for Windows** band.
+3. Open **Command Palette → Dock settings** and enable the **Itsycal for Windows** band.
 
-The build is a pre-release because it is signed with a development certificate. `winget
-install Folieson.ItsycalForWindows` becomes the primary path once a trusted (free
-open-source) code-signing certificate is in place; the staged WinGet manifests in
-[`winget/`](winget) already carry the release URLs and hashes, and
+Newer builds install over the previous package in place: each build stamps a higher package
+revision, so no uninstall step is needed. The build is a pre-release because it is signed
+with a development certificate. `winget install Folieson.ItsycalForWindows` becomes the
+primary path once a trusted (free open-source) code-signing certificate is in place; the
+staged WinGet manifests in [`winget/`](winget) already carry the release URLs and hashes, and
 [`docs/SIGNING.md`](docs/SIGNING.md) documents the signing options.
-
 ## Screenshots
 
 | Command Palette | Calendar flyout |
@@ -70,7 +68,7 @@ show a Russian locale and weeks starting on Monday. The flyout marks days that h
 with a dot, shows today with the accent colour, and lists the selected day's events with
 their time, title, and location. The visible events come from a temporary "Itsycal demo"
 calendar that the DEBUG build can create with the `Itsycal: add demo events` command and
-remove again with `Itsycal: remove demo events` — release builds ship neither the commands
+remove again with `Itsycal: remove demo events` вЂ” release builds ship neither the commands
 nor the demo calendar.
 
 ## Build from source
@@ -117,6 +115,6 @@ Read [AGENTS.md](AGENTS.md) for repository rules (human and AI contributors alik
 
 ## License
 
-MIT. See [LICENSE.txt](LICENSE.txt) вЂ” it retains the upstream ItsyCal copyright. The Windows
+MIT. See [LICENSE.txt](LICENSE.txt) РІР‚вЂќ it retains the upstream ItsyCal copyright. The Windows
 extension skeleton is derived from the Microsoft PowerToys template; see
 [windows/THIRD-PARTY-NOTICES.md](windows/THIRD-PARTY-NOTICES.md) for details.

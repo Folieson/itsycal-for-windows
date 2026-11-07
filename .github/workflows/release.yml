@@ -1,4 +1,4 @@
-﻿name: release
+name: release
 
 # Builds signed MSIX packages for x64 and arm64 from a v* tag, publishes a GitHub
 # release, and prepares the WinGet manifests for submission.
@@ -64,11 +64,9 @@ jobs:
           }
           $version = $Matches['version']
 
-          [xml]$manifest = Get-Content -LiteralPath 'windows/src/ItsycalForWindows/Package.appxmanifest' -Raw
-          $packageVersion = [string]$manifest.Package.Identity.Version
-          if ($packageVersion -ne "$version.0") {
-            throw "Tag $tag does not match Package.appxmanifest Identity Version $packageVersion. Bump the manifest version deliberately in the release commit; the MSIX identity is release-sensitive."
-          }
+          # The package identity is derived from the tag, never hand-maintained: the build
+          # stamps Package.appxmanifest and the project metadata before packaging.
+          $packageVersion = "$version.0"
 
           $buildKind = if ([string]::IsNullOrWhiteSpace($env:TRUSTED_SIGNING_PFX_BASE64)) { 'dev' } else { 'trusted' }
           $wingetEnabled = if ([string]::IsNullOrWhiteSpace($env:WINGET_PAT)) { 'false' } else { 'true' }
@@ -78,6 +76,10 @@ jobs:
           "build_kind=$buildKind" >> $env:GITHUB_OUTPUT
           "winget_enabled=$wingetEnabled" >> $env:GITHUB_OUTPUT
           Write-Host "Release ${tag}: version $version, package version $packageVersion, signing mode $buildKind, winget automation $wingetEnabled."
+
+      - name: Stamp the release package version
+        shell: pwsh
+        run: ./windows/scripts/Set-PackageVersion.ps1 -Version "$env:PACKAGE_VERSION"
 
       - name: Build and sign the MSIX packages
         shell: pwsh
@@ -119,9 +121,21 @@ jobs:
           $tag = $env:RELEASE_TAG
           $version = $env:VERSION
           $packageVersion = $env:PACKAGE_VERSION
-          $sourceDir = "winget/Folieson.ItsycalForWindows/$version"
+          $sourceRoot = 'winget/Folieson.ItsycalForWindows'
+          $sourceDir = Join-Path $sourceRoot $version
           if (-not (Test-Path -LiteralPath $sourceDir)) {
-            throw "No WinGet manifests for $version. Create winget/Folieson.ItsycalForWindows/$version/ before tagging the release."
+            # No per-version directory: render this release's manifests from the newest
+            # existing template. Release automation must not require a manual folder bump.
+            $template = Get-ChildItem -LiteralPath $sourceRoot -Directory -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -match '^\d+\.\d+\.\d+$' } |
+              Sort-Object { [version]$_.Name } -Descending |
+              Select-Object -First 1
+            if (-not $template) {
+              throw "No WinGet manifest template under $sourceRoot."
+            }
+            New-Item -ItemType Directory -Force -Path $sourceDir | Out-Null
+            Copy-Item -Path (Join-Path $template.FullName '*.yaml') -Destination $sourceDir
+            Write-Host "Rendered the WinGet manifests for $version from template $($template.Name)."
           }
 
           $buildInfo = Get-Content -LiteralPath "windows/artifacts/release/$version/build-info.json" -Raw | ConvertFrom-Json
@@ -129,6 +143,13 @@ jobs:
           Remove-Item -LiteralPath $manifestDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
           Copy-Item -Path (Join-Path $sourceDir '*.yaml') -Destination $manifestDir
+
+          # Every manifest copy carries the release version, not the template version.
+          foreach ($manifestFile in (Get-ChildItem -LiteralPath $manifestDir -Filter '*.yaml')) {
+            $fileContent = Get-Content -LiteralPath $manifestFile.FullName -Raw
+            $fileContent = $fileContent -replace '(?m)^PackageVersion:.*$', "PackageVersion: $version"
+            Set-Content -LiteralPath $manifestFile.FullName -Value $fileContent -NoNewline -Encoding utf8
+          }
 
           $installerPath = Join-Path $manifestDir 'Folieson.ItsycalForWindows.installer.yaml'
           if (-not (Test-Path -LiteralPath $installerPath)) {

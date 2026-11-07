@@ -51,6 +51,14 @@ jobs:
       - name: Restore
         run: dotnet restore windows/ItsycalForWindows.sln -p:Platform=x64
 
+      - name: Stamp a unique development package version
+        shell: pwsh
+        run: |
+          # Every development build gets a higher revision than the previous one, so
+          # Add-AppxPackage upgrades in place instead of failing with 0x80073CFB.
+          $revision = ([int]$env:GITHUB_RUN_NUMBER % 65534) + 1
+          ./windows/scripts/Set-PackageVersion.ps1 -Revision $revision
+
       - name: Build and package MSIX (Debug, x64)
         run: >
           dotnet build windows/src/ItsycalForWindows/ItsycalForWindows.csproj -c Debug -p:Platform=x64 --no-restore
