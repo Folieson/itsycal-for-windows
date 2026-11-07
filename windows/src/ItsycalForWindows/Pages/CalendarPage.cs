@@ -614,10 +614,7 @@ internal sealed partial class CalendarPage : ContentPage
     {
         var culture = CultureInfo.CurrentCulture;
         var weekday = culture.TextInfo.ToTitleCase(culture.DateTimeFormat.GetDayName(selectedDate.DayOfWeek));
-        var subtitle = string.Concat(
-            weekday,
-            EventSeparator,
-            selectedDate.ToString("d MMMM yyyy", culture));
+        var subtitle = weekday;
 
         return new JsonObject
         {
