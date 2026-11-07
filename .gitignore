@@ -1,7 +1,52 @@
-## User settings
-xcuserdata/
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
 
-## Local signing config (do not commit — see Local.xcconfig.example)
+# Editors and IDEs
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.user
+*.suo
+.idea/
+
+# Secrets and local configuration — never commit these
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.pem
+*.snk
+*.cer
+*.crt
+*.b64
+secrets.json
+*.secret
+appsettings.*.local.json
 Local.xcconfig
 
-.DS_Store
+# Build output and packages
+bin/
+obj/
+publish/
+artifacts/
+AppPackages/
+BundleArtifacts/
+Generated Files/
+*.msix
+*.msixbundle
+*.appx
+*.appxupload
+*.msixupload
+TestResults/
+coverage/
+
+# Agent scratch space
+.dsh-tmp/
+
+# Logs
+*.log
