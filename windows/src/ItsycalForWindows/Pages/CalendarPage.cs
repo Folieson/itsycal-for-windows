@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -9,6 +9,7 @@ using ItsycalForWindows.Models;
 using ItsycalForWindows.Services;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
+using Windows.System;
 
 namespace ItsycalForWindows.Pages;
 
@@ -41,10 +42,26 @@ internal sealed partial class CalendarPage : ContentPage
     private const string NextMonthAction = "next";
 
     // Action.Submit data keys. "nav" is the month-navigation key kept from the first version of
-    // the card; "day" carries the date of a clicked day cell.
+    // the card; "day" carries the date of a clicked day cell; "event" carries the stable key of a
+    // clicked event row and "eventAction" selects a details command on that event.
     private const string NavigationPayloadKey = "nav";
     private const string DayPayloadKey = "day";
     private const string DayPayloadFormat = "yyyy-MM-dd";
+    private const string EventPayloadKey = "event";
+    private const string EventActionPayloadKey = "eventAction";
+    private const string JoinEventAction = "join";
+    private const string CopyEventAction = "copy";
+    private const string CloseEventAction = "close";
+
+    // Event details commands and notices.
+    private const string JoinMeetingLabel = "Join meeting";
+    private const string CopyLinkLabel = "Copy link";
+    private const string CloseDetailsLabel = "Close details";
+    private const string CopiedNotice = "Meeting link copied.";
+    private const string NoMeetingToast = "This event has no meeting link.";
+    private const string LaunchFailedToast = "Could not open the meeting link.";
+    private const string CopyFailedToast = "Could not copy the meeting link.";
+    private const int DetailsPreviewLength = 480;
 
     // The extension ships English UI strings only (windows/README.md, Limitations).
     private const string WeekNumberHeader = "Wk";
@@ -93,9 +110,17 @@ internal sealed partial class CalendarPage : ContentPage
     // The card is only rebuilt when something that affects it changed.
     private CalendarMonth? _renderedMonth;
     private DateOnly? _renderedSelectedDate;
+    private string? _renderedSelectedEventKey;
+    private string? _renderedDetailsNotice;
     private IReadOnlyList<CalendarEvent>? _renderedEvents;
     private bool _renderedLoading;
     private bool _renderedWeekNumbers;
+
+    // The event whose details block is expanded under the agenda, and a transient line (for
+    // example the copy confirmation) shown inside that block. Both are cleared whenever the
+    // day or month selection moves.
+    private CalendarEvent? _selectedEvent;
+    private string? _detailsNotice;
 
     public CalendarPage(SettingsManager settings, IEventSource eventSource)
         : this(settings, eventSource, CalendarMonth.ForToday(settings.WeekStart))
@@ -177,41 +202,193 @@ internal sealed partial class CalendarPage : ContentPage
     }
 
     /// <summary>
-    /// Handles the card's Action.Submit actions: the month buttons and the day cells. The host
-    /// passes the action's <c>data</c> object as the second argument (the installed FormContent
-    /// API exposes <c>SubmitForm(inputs, data)</c>); reading the same keys from
-    /// <paramref name="inputs"/> as a fallback keeps navigation working if a host merges the
-    /// action data into the input payload instead. Invoked by <see cref="CalendarForm"/>.
+    /// Handles the card's Action.Submit actions: the month buttons, the day cells, the event rows
+    /// and the event-details commands. The host passes the action's <c>data</c> object as the
+    /// second argument (the installed FormContent API exposes <c>SubmitForm(inputs, data)</c>);
+    /// reading the same keys from <paramref name="inputs"/> as a fallback keeps the interactions
+    /// working if a host merges the action data into the input payload instead. Invoked by
+    /// <see cref="CalendarForm"/>.
     /// </summary>
     private CommandResult HandleFormSubmit(string inputs, string? data)
     {
         var action = ReadCalendarAction(data) ?? ReadCalendarAction(inputs);
-        if (action is { } requested)
+        if (action is not { } requested)
         {
-            var current = Month;
-            if (requested.Day is { } day)
+            return CommandResult.KeepOpen();
+        }
+
+        if (requested.Day is { } day)
+        {
+            SelectDay(day);
+            return CommandResult.KeepOpen();
+        }
+
+        if (requested.EventAction is { } eventAction)
+        {
+            switch (eventAction)
             {
-                SelectDay(day);
+                case JoinEventAction:
+                    return JoinMeeting(requested.EventKey);
+                case CopyEventAction:
+                    return CopyMeetingLink(requested.EventKey);
+                case CloseEventAction:
+                    ClearSelectedEvent();
+                    return CommandResult.KeepOpen();
             }
-            else
-            {
-                switch (requested.Navigation)
-                {
-                    case PreviousMonthAction:
-                        Navigate(current.Previous());
-                        break;
-                    case TodayAction:
-                        ShowToday();
-                        break;
-                    case NextMonthAction:
-                        Navigate(current.Next());
-                        break;
-                }
-            }
+        }
+
+        if (requested.EventKey is { } eventKey)
+        {
+            SelectEvent(eventKey);
+            return CommandResult.KeepOpen();
+        }
+
+        var current = Month;
+        switch (requested.Navigation)
+        {
+            case PreviousMonthAction:
+                Navigate(current.Previous());
+                break;
+            case TodayAction:
+                ShowToday();
+                break;
+            case NextMonthAction:
+                Navigate(current.Next());
+                break;
         }
 
         return CommandResult.KeepOpen();
     }
+
+    /// <summary>
+    /// Expands the details block for the event with <paramref name="eventKey"/>, or collapses it
+    /// when the same row is activated again. The events are already cached, so this is a pure
+    /// re-render with no event-store query.
+    /// </summary>
+    private void SelectEvent(string eventKey)
+    {
+        lock (_sync)
+        {
+            var match = FindEventByKeyLocked(eventKey);
+            var isSameEvent = match is not null
+                && _selectedEvent is not null
+                && string.Equals(EventKey(_selectedEvent), eventKey, StringComparison.Ordinal);
+            _selectedEvent = isSameEvent ? null : match;
+            _detailsNotice = null;
+        }
+
+        Render(startEventLoad: false);
+    }
+
+    private void ClearSelectedEvent()
+    {
+        lock (_sync)
+        {
+            _selectedEvent = null;
+            _detailsNotice = null;
+        }
+
+        Render(startEventLoad: false);
+    }
+
+    private void SetDetailsNotice(string notice)
+    {
+        lock (_sync)
+        {
+            _detailsNotice = notice;
+        }
+
+        Render(startEventLoad: false);
+    }
+
+    /// <summary>
+    /// Launches the event's online-meeting URI. The host invokes SubmitForm on a background thread,
+    /// so waiting for the shell to accept the URI is safe and lets the result decide between
+    /// keeping the flyout open and reporting the failure as a toast.
+    /// </summary>
+    private CommandResult JoinMeeting(string? eventKey)
+    {
+        if (!TryGetMeetingUri(eventKey, out var uri) || uri is null)
+        {
+            return CommandResult.ShowToast(NoMeetingToast);
+        }
+
+        try
+        {
+            if (Launcher.LaunchUriAsync(uri).AsTask().GetAwaiter().GetResult())
+            {
+                return CommandResult.KeepOpen();
+            }
+        }
+        catch (Exception)
+        {
+            // Fall through to the toast: a failed launch must never crash the flyout.
+        }
+
+        return CommandResult.ShowToast(LaunchFailedToast);
+    }
+
+    /// <summary>Copies the event's online-meeting URI to the clipboard.</summary>
+    private CommandResult CopyMeetingLink(string? eventKey)
+    {
+        if (!TryGetMeetingUri(eventKey, out var uri) || uri is null)
+        {
+            return CommandResult.ShowToast(NoMeetingToast);
+        }
+
+        try
+        {
+            ClipboardHelper.SetText(uri.AbsoluteUri);
+        }
+        catch (Exception)
+        {
+            return CommandResult.ShowToast(CopyFailedToast);
+        }
+
+        SetDetailsNotice(CopiedNotice);
+        return CommandResult.KeepOpen();
+    }
+
+    private bool TryGetMeetingUri(string? eventKey, out Uri? uri)
+    {
+        uri = null;
+        CalendarEvent? meeting;
+        lock (_sync)
+        {
+            meeting = FindEventByKeyLocked(eventKey);
+        }
+
+        return meeting is not null && meeting.TryGetOnlineMeetingUri(out uri) && uri is not null;
+    }
+
+    private CalendarEvent? FindEventByKeyLocked(string? eventKey)
+    {
+        if (string.IsNullOrWhiteSpace(eventKey))
+        {
+            return null;
+        }
+
+        foreach (var candidate in GetEventsForDay(_events, _month, _selectedDate))
+        {
+            if (string.Equals(EventKey(candidate), eventKey, StringComparison.Ordinal))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Stable identity of an event within the current process: its UTC start and end ticks plus a
+    /// subject hash, so two events that share a time slot still get distinct payload keys.
+    /// </summary>
+    private static string EventKey(CalendarEvent item) => string.Concat(
+        item.Start.UtcTicks.ToString(CultureInfo.InvariantCulture),
+        ":",
+        item.End.UtcTicks.ToString(CultureInfo.InvariantCulture),
+        ":",
+        ((uint)StringComparer.Ordinal.GetHashCode(item.Subject)).ToString(CultureInfo.InvariantCulture));
 
     /// <summary>
     /// Shows <paramref name="month"/> and keeps the selection on the same day-of-month, clamped
@@ -255,6 +432,11 @@ internal sealed partial class CalendarPage : ContentPage
             }
 
             _selectedDate = date;
+
+            // The expanded details describe the agenda that was on screen; any day selection
+            // (including one inside the same month) collapses them.
+            _selectedEvent = null;
+            _detailsNotice = null;
             month = _month;
         }
 
@@ -292,6 +474,8 @@ internal sealed partial class CalendarPage : ContentPage
     {
         CalendarMonth month;
         DateOnly selectedDate;
+        CalendarEvent? selectedEvent;
+        string? detailsNotice;
         IReadOnlyList<CalendarEvent> events;
         bool isLoading;
         bool startLoad = false;
@@ -320,23 +504,37 @@ internal sealed partial class CalendarPage : ContentPage
 
             month = _month;
             selectedDate = _selectedDate;
+            selectedEvent = _selectedEvent;
+            detailsNotice = _detailsNotice;
             events = _events;
             isLoading = _isLoading;
 
+            var selectedEventKey = selectedEvent is null ? null : EventKey(selectedEvent);
             var showWeekNumbers = _settings.ShowWeekNumbers;
             var showLoading = isLoading && events.Count == 0;
             if (!ReferenceEquals(_renderedMonth, month)
                 || _renderedSelectedDate != selectedDate
+                || !string.Equals(selectedEventKey, _renderedSelectedEventKey, StringComparison.Ordinal)
+                || !string.Equals(detailsNotice, _renderedDetailsNotice, StringComparison.Ordinal)
                 || !ReferenceEquals(_renderedEvents, events)
                 || _renderedLoading != showLoading
                 || _renderedWeekNumbers != showWeekNumbers)
             {
                 _renderedMonth = month;
                 _renderedSelectedDate = selectedDate;
+                _renderedSelectedEventKey = selectedEventKey;
+                _renderedDetailsNotice = detailsNotice;
                 _renderedEvents = events;
                 _renderedLoading = showLoading;
                 _renderedWeekNumbers = showWeekNumbers;
-                _renderedTemplate = BuildTemplateJson(month, events, showWeekNumbers, showLoading, selectedDate);
+                _renderedTemplate = BuildTemplateJson(
+                    month,
+                    events,
+                    showWeekNumbers,
+                    showLoading,
+                    selectedDate,
+                    selectedEvent,
+                    detailsNotice);
                 templateToPublish = _renderedTemplate;
                 formToRefresh = _currentForm;
             }
@@ -400,6 +598,17 @@ internal sealed partial class CalendarPage : ContentPage
             }
 
             _events = SortEvents(events);
+            if (_selectedEvent is not null)
+            {
+                // A refreshed snapshot replaces the event instances; re-resolve the expanded
+                // event from the new list and drop it when the store no longer reports it.
+                _selectedEvent = FindEventByKeyLocked(EventKey(_selectedEvent));
+                if (_selectedEvent is null)
+                {
+                    _detailsNotice = null;
+                }
+            }
+
             _loadedFrom = fromInclusive;
             _loadedToExclusive = toExclusive;
             _loadedAtUtc = DateTime.UtcNow;
@@ -435,8 +644,11 @@ internal sealed partial class CalendarPage : ContentPage
         var previousToday = _todayAtLastRender;
         _todayAtLastRender = today;
 
-        // Rebuild the grid so IsToday flags follow the new local date.
+        // Rebuild the grid so IsToday flags follow the new local date, and collapse the event
+        // details: the agenda they described belongs to the previous day.
         _month = new CalendarMonth(_month.Year, _month.Month, _month.WeekStart);
+        _selectedEvent = null;
+        _detailsNotice = null;
 
         if (_selectedDate == previousToday)
         {
@@ -472,6 +684,11 @@ internal sealed partial class CalendarPage : ContentPage
         _loadingToExclusive = null;
         _isLoading = false;
         _loadGeneration++;
+
+        // A new day or month selection drops the expanded event details; they only make sense
+        // for the agenda that was on screen.
+        _selectedEvent = null;
+        _detailsNotice = null;
     }
 
     private bool NeedsEventLoadLocked(DateOnly fromInclusive, DateOnly toExclusive)
@@ -536,13 +753,11 @@ internal sealed partial class CalendarPage : ContentPage
                 return null;
             }
 
-            string? navigation = json[NavigationPayloadKey] is JsonValue navigationValue
-                && navigationValue.TryGetValue<string>(out var action)
-                ? action
-                : null;
+            string? navigation = ReadString(json, NavigationPayloadKey);
+            string? eventKey = ReadString(json, EventPayloadKey);
+            string? eventAction = ReadString(json, EventActionPayloadKey);
 
-            DateOnly? day = json[DayPayloadKey] is JsonValue dayValue
-                && dayValue.TryGetValue<string>(out var dayText)
+            DateOnly? day = ReadString(json, DayPayloadKey) is { } dayText
                 && DateOnly.TryParseExact(
                     dayText,
                     DayPayloadFormat,
@@ -552,9 +767,9 @@ internal sealed partial class CalendarPage : ContentPage
                 ? parsedDay
                 : null;
 
-            return navigation is null && day is null
+            return navigation is null && day is null && eventKey is null && eventAction is null
                 ? null
-                : new CalendarAction(navigation, day);
+                : new CalendarAction(navigation, day, eventKey, eventAction);
         }
         catch (JsonException)
         {
@@ -562,12 +777,17 @@ internal sealed partial class CalendarPage : ContentPage
         }
     }
 
+    private static string? ReadString(JsonObject json, string key) =>
+        json[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
     private static string BuildTemplateJson(
         CalendarMonth month,
         IReadOnlyList<CalendarEvent> events,
         bool showWeekNumbers,
         bool showLoading,
-        DateOnly selectedDate)
+        DateOnly selectedDate,
+        CalendarEvent? selectedEvent,
+        string? detailsNotice)
     {
         var eventCounts = EventRange.CountPerDay(events, month.VisibleStart, month.VisibleEndExclusive);
         var gridMonth = eventCounts.Count == 0 ? month : month.WithEventCounts(eventCounts);
@@ -582,7 +802,7 @@ internal sealed partial class CalendarPage : ContentPage
         // The event source may return events that started before the visible range (its query
         // uses a lookback for multi-day events). GroupByDay projects them onto the visible days
         // and clips the projection, so the section only needs the selected day's group.
-        AddEventsSection(body, selectedDate, selectedEvents, showLoading);
+        AddEventsSection(body, selectedDate, selectedEvents, showLoading, selectedEvent, detailsNotice);
 
         var card = new JsonObject
         {
@@ -801,7 +1021,9 @@ internal sealed partial class CalendarPage : ContentPage
         JsonArray body,
         DateOnly selectedDate,
         IReadOnlyList<CalendarEvent> events,
-        bool showLoading)
+        bool showLoading,
+        CalendarEvent? selectedEvent,
+        string? detailsNotice)
     {
         // One quiet caption with the single subtle separator of the card; the separator plus the
         // large spacing is what marks the transition from the grid to the events.
@@ -826,9 +1048,15 @@ internal sealed partial class CalendarPage : ContentPage
             return;
         }
 
+        var selectedEventKey = selectedEvent is null ? null : EventKey(selectedEvent);
         foreach (var item in events)
         {
-            body.Add((JsonNode)BuildEventCard(item, selectedDate));
+            body.Add((JsonNode)BuildEventCard(item, selectedDate, selectedEventKey));
+        }
+
+        if (selectedEvent is not null)
+        {
+            AddEventDetails(body, selectedEvent, selectedDate, detailsNotice);
         }
     }
 
@@ -848,19 +1076,26 @@ internal sealed partial class CalendarPage : ContentPage
     }
 
     /// <summary>
-    /// One event card on its own rounded surface: an accent time gutter and the title column. The
-    /// times describe the slice of the event that falls on <paramref name="date"/>, so a multi-day
-    /// event shows the part that belongs to the selected day.
+    /// One clickable event card: an accent time gutter and the title column. The times describe
+    /// the slice of the event that falls on <paramref name="date"/>, so a multi-day event shows
+    /// the part that belongs to the selected day. <c>selectAction</c> expands the event details;
+    /// the expanded row is marked by the accent title and the details block below the agenda.
     /// </summary>
-    private static JsonObject BuildEventCard(CalendarEvent item, DateOnly date)
+    private static JsonObject BuildEventCard(CalendarEvent item, DateOnly date, string? selectedEventKey)
     {
         var slice = EventRange.ClipToRange(item, date, date.AddDays(1)) ?? item;
         var timeText = item.IsAllDay ? AllDayLabel : FormatTimeRange(slice);
         var metaText = FormatEventMeta(item, date);
+        var itemKey = EventKey(item);
+        var isSelected = string.Equals(itemKey, selectedEventKey, StringComparison.Ordinal);
 
         var details = new JsonArray
         {
-            (JsonNode)TextBlock(item.DisplayTitle, weight: "bolder", wrap: true),
+            (JsonNode)TextBlock(
+                item.DisplayTitle,
+                color: isSelected ? "accent" : null,
+                weight: "bolder",
+                wrap: true),
         };
 
         if (!string.IsNullOrEmpty(metaText))
@@ -874,9 +1109,17 @@ internal sealed partial class CalendarPage : ContentPage
             ["type"] = "ColumnSet",
             ["verticalContentAlignment"] = "center",
             ["spacing"] = SegmentSpacing,
+            ["selectAction"] = new JsonObject
+            {
+                ["type"] = "Action.Submit",
+                ["data"] = new JsonObject
+                {
+                    [EventPayloadKey] = itemKey,
+                },
+            },
             ["columns"] = new JsonArray
             {
-                // Accent time gutter: the only coloured text in the event row.
+                // Accent time gutter: the only coloured text in an idle event row.
                 (JsonNode)BuildColumn(
                     "auto",
                     TextBlock(timeText, size: "small", color: "accent", weight: "bolder")),
@@ -884,6 +1127,151 @@ internal sealed partial class CalendarPage : ContentPage
             },
         };
     }
+
+    /// <summary>
+    /// The expanded details block: transparent (no filled surface), opened by one subtle
+    /// separator, with the event title in the accent colour. It repeats the day and the full
+    /// time range, then the location, the notes and the meeting commands.
+    /// </summary>
+    private static void AddEventDetails(JsonArray body, CalendarEvent item, DateOnly date, string? notice)
+    {
+        var eventKey = EventKey(item);
+
+        body.Add((JsonNode)TextBlock(
+            item.DisplayTitle,
+            size: "medium",
+            weight: "bolder",
+            color: "accent",
+            spacing: SectionSpacing,
+            separator: true,
+            wrap: true));
+
+        body.Add((JsonNode)TextBlock(
+            FormatEventWhenLine(item, date),
+            size: "small",
+            subtle: true,
+            spacing: RowSpacing,
+            wrap: true));
+
+        if (!string.IsNullOrWhiteSpace(item.Location))
+        {
+            body.Add((JsonNode)TextBlock(
+                item.Location.Trim(),
+                size: "small",
+                subtle: true,
+                spacing: "none",
+                wrap: true));
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Details))
+        {
+            body.Add((JsonNode)TextBlock(
+                FormatDetailsText(item.Details),
+                size: "small",
+                subtle: true,
+                spacing: RowSpacing,
+                wrap: true));
+        }
+
+        if (!string.IsNullOrEmpty(notice))
+        {
+            body.Add((JsonNode)TextBlock(notice, size: "small", color: "accent", spacing: RowSpacing, wrap: true));
+        }
+
+        body.Add((JsonNode)BuildDetailsActions(item, eventKey));
+    }
+
+    /// <summary>
+    /// The full "when" line of the expanded event: "Saturday, 7 November 2026 · 10:00–10:45",
+    /// with "All day" for all-day events and "Day 2 of 3" for multi-day ones.
+    /// </summary>
+    private static string FormatEventWhenLine(CalendarEvent item, DateOnly date)
+    {
+        var culture = CultureInfo.CurrentCulture;
+        var dayText = date.ToDateTime(TimeOnly.MinValue).ToString("dddd, d MMMM yyyy", culture);
+        var slice = EventRange.ClipToRange(item, date, date.AddDays(1)) ?? item;
+        var timeText = item.IsAllDay ? AllDayLabel : FormatTimeRange(slice);
+
+        var parts = new List<string>(3)
+        {
+            dayText,
+            timeText,
+        };
+
+        var span = EventRange.GetLocalDaySpan(item);
+        if (span is not null && span.Value.LastDay > span.Value.FirstDay)
+        {
+            var dayNumber = date.DayNumber - span.Value.FirstDay.DayNumber + 1;
+            var dayCount = span.Value.LastDay.DayNumber - span.Value.FirstDay.DayNumber + 1;
+            parts.Add($"Day {dayNumber} of {dayCount}");
+        }
+
+        return string.Join(EventSeparator, parts);
+    }
+
+    /// <summary>
+    /// Flattens and shortens the notes paragraph so a long description cannot make the card
+    /// unreadable; the full text stays available in the calendar app.
+    /// </summary>
+    private static string FormatDetailsText(string details)
+    {
+        var flattened = string.Join(
+            ' ',
+            details.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (flattened.Length <= DetailsPreviewLength)
+        {
+            return flattened;
+        }
+
+        var cut = flattened.LastIndexOf(' ', DetailsPreviewLength);
+        if (cut < DetailsPreviewLength / 2)
+        {
+            cut = DetailsPreviewLength;
+        }
+
+        return flattened[..cut].TrimEnd() + "\u2026";
+    }
+
+    private static JsonObject BuildDetailsActions(CalendarEvent item, string eventKey)
+    {
+        var actions = new JsonArray();
+
+        if (item.HasOnlineMeetingLink)
+        {
+            // "positive" is the Adaptive Cards action style for the primary, constructive
+            // command; a renderer that does not paint it still shows a default button.
+            actions.Add((JsonNode)BuildSubmitAction(
+                JoinMeetingLabel,
+                "details-join",
+                EventActionData(eventKey, JoinEventAction),
+                style: "positive"));
+            actions.Add((JsonNode)BuildSubmitAction(
+                CopyLinkLabel,
+                "details-copy",
+                EventActionData(eventKey, CopyEventAction)));
+        }
+
+        actions.Add((JsonNode)BuildSubmitAction(
+            CloseDetailsLabel,
+            "details-close",
+            new JsonObject
+            {
+                [EventActionPayloadKey] = CloseEventAction,
+            }));
+
+        return new JsonObject
+        {
+            ["type"] = "ActionSet",
+            ["spacing"] = RowSpacing,
+            ["actions"] = actions,
+        };
+    }
+
+    private static JsonObject EventActionData(string eventKey, string eventAction) => new()
+    {
+        [EventPayloadKey] = eventKey,
+        [EventActionPayloadKey] = eventAction,
+    };
 
     private static string FormatTimeRange(CalendarEvent item)
     {
@@ -931,18 +1319,35 @@ internal sealed partial class CalendarPage : ContentPage
     /// carries the full label; the id and the <c>data.nav</c> payload are unchanged from the
     /// previous layout so the command handling is identical.
     /// </summary>
-    private static JsonObject BuildNavigationAction(string title, string action, string id, string? tooltip)
+    private static JsonObject BuildNavigationAction(string title, string action, string id, string? tooltip) =>
+        BuildSubmitAction(
+            title,
+            id,
+            new JsonObject
+            {
+                [NavigationPayloadKey] = action,
+            },
+            tooltip: tooltip);
+
+    private static JsonObject BuildSubmitAction(
+        string title,
+        string id,
+        JsonObject data,
+        string? style = null,
+        string? tooltip = null)
     {
         var button = new JsonObject
         {
             ["type"] = "Action.Submit",
             ["id"] = id,
             ["title"] = title,
-            ["data"] = new JsonObject
-            {
-                [NavigationPayloadKey] = action,
-            },
+            ["data"] = data,
         };
+
+        if (style is not null)
+        {
+            button["style"] = style;
+        }
 
         if (tooltip is not null)
         {
@@ -1030,7 +1435,13 @@ internal sealed partial class CalendarPage : ContentPage
     /// <summary>One card action decoded from the submit payload.</summary>
     /// <param name="Navigation">Month navigation action key, when the payload came from a button.</param>
     /// <param name="Day">Selected date, when the payload came from a day cell.</param>
-    private readonly record struct CalendarAction(string? Navigation, DateOnly? Day);
+    /// <param name="EventKey">Stable event key, when the payload came from an event row or command.</param>
+    /// <param name="EventAction">Event details command key ("join", "copy" or "close").</param>
+    private readonly record struct CalendarAction(
+        string? Navigation,
+        DateOnly? Day,
+        string? EventKey,
+        string? EventAction);
 }
 
 /// <summary>
