@@ -62,12 +62,16 @@ open-source) code-signing certificate is in place; the staged WinGet manifests i
 
 | Command Palette | Calendar flyout |
 |---|---|
-| ![Itsycal for Windows in Command Palette search](docs/screenshots/palette-search.png) | ![Month calendar with today selected and events for the selected day](docs/screenshots/calendar-flyout.png) |
+| ![Itsycal for Windows in Command Palette search](docs/screenshots/palette-search.png) | ![Month calendar with today selected, event dots and the selected day's events](docs/screenshots/calendar-flyout.png) |
 
-Captured from the installed 1.0.0 build. The extension follows the Windows display
-language, the first day of week and the week-number setting: the screenshots above show a
-Russian locale, weeks starting on Monday, and the empty state because no calendar account is
-configured on that machine.
+Captured from the installed 1.0.0 development build. The extension follows the Windows
+display language, the first day of week and the week-number setting: the screenshots above
+show a Russian locale and weeks starting on Monday. The flyout marks days that have events
+with a dot, shows today with the accent colour, and lists the selected day's events with
+their time, title, and location. The visible events come from a temporary "Itsycal demo"
+calendar that the DEBUG build can create with the `Itsycal: add demo events` command and
+remove again with `Itsycal: remove demo events` — release builds ship neither the commands
+nor the demo calendar.
 
 ## Build from source
 
