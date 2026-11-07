@@ -1,4 +1,4 @@
-# Signing and distribution
+﻿# Signing and distribution
 
 Itsycal for Windows ships as a **signed MSIX package**. This document covers why the
 signature is mandatory, which certificate options exist for an open-source project, the
@@ -36,7 +36,7 @@ development and **not acceptable for WinGet**.
 Whichever trusted option you pick, the certificate subject (the `CN=...` part) must equal
 the `Publisher` in `windows/src/ItsycalForWindows/Package.appxmanifest`. Changing the
 Publisher is a release-sensitive identity change (it also changes the package family
-name) — do it deliberately in its own PR, together with the WinGet manifest update.
+name) вЂ” do it deliberately in its own PR, together with the WinGet manifest update.
 
 ## GitHub secrets
 
@@ -58,9 +58,9 @@ Export-PfxCertificate -Cert $cert -FilePath itsycal-signing.pfx `
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('itsycal-signing.pfx')) |
   Set-Content -NoNewline signing-pfx.b64
 
-gh secret set SIGNING_PFX_BASE64   --repo Folieson/Itsycal < signing-pfx.b64
-gh secret set SIGNING_PFX_PASSWORD --repo Folieson/Itsycal
-gh secret set WINGET_PAT           --repo Folieson/Itsycal
+gh secret set SIGNING_PFX_BASE64   --repo Folieson/itsycal-for-windows < signing-pfx.b64
+gh secret set SIGNING_PFX_PASSWORD --repo Folieson/itsycal-for-windows
+gh secret set WINGET_PAT           --repo Folieson/itsycal-for-windows
 ```
 
 If the CA delivers a PEM key and certificate instead of a PFX, either import them into

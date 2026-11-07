@@ -1,6 +1,6 @@
-# Itsycal for Windows
+﻿# Itsycal for Windows
 
-A calendar for the **Windows PowerToys Command Palette Dock** — the closest Windows
+A calendar for the **Windows PowerToys Command Palette Dock** вЂ” the closest Windows
 equivalent of [ItsyCal](https://github.com/sfsam/itsycal)'s menu-bar calendar.
 
 This repository contains the Windows application only. It is derived from the MIT-licensed
@@ -10,17 +10,17 @@ fork relation is kept for attribution and history, not for shared code.
 
 ## Features
 
-- **Date in the Dock** — an always-visible band at the screen edge showing today's date,
+- **Date in the Dock** вЂ” an always-visible band at the screen edge showing today's date,
   refreshed automatically across midnight.
-- **Month calendar** — one click opens a flyout with a 6×7 month grid, today highlighted,
+- **Month calendar** вЂ” one click opens a flyout with a 6Г—7 month grid, today highlighted,
   adjacent-month days dimmed, and previous/next/today navigation.
-- **Day selection** — click a day to see that day's events; the selected day is highlighted.
-- **Events** — read-only events from the local Windows calendar, with time ranges, location,
+- **Day selection** вЂ” click a day to see that day's events; the selected day is highlighted.
+- **Events** вЂ” read-only events from the local Windows calendar, with time ranges, location,
   all-day and multi-day handling; the calendar keeps working when no calendar is configured.
-- **ISO week numbers** — optional week-number column (ISO-8601).
-- **Settings** — dock date format, event indicator, first day of the week, week numbers,
+- **ISO week numbers** вЂ” optional week-number column (ISO-8601).
+- **Settings** вЂ” dock date format, event indicator, first day of the week, week numbers,
   applied without restarting the extension.
-- **Private by design** — no network calls, no telemetry, calendar data never leaves the
+- **Private by design** вЂ” no network calls, no telemetry, calendar data never leaves the
   machine.
 
 ## Requirements
@@ -35,13 +35,13 @@ required.
 
 ## Install
 
-The current public build is the **1.0.0 development pre-release** — a signed MSIX for x64
+The current public build is the **1.0.0 development pre-release** вЂ” a signed MSIX for x64
 and ARM64 that is self-contained (it carries its own .NET runtime, no separate installation
 needed):
 
 1. Download `ItsycalForWindows_1.0.0.0_x64.msix` (or the `_arm64.msix` file) and
    `ItsycalForWindows_1.0.0.0_dev.cer` from the
-   [v1.0.0 release](https://github.com/Folieson/Itsycal/releases/tag/v1.0.0).
+   [v1.0.0 release](https://github.com/Folieson/itsycal-for-windows/releases/tag/v1.0.0).
 2. From an **elevated** PowerShell, trust the development certificate once and register the
    package:
 
@@ -50,7 +50,7 @@ needed):
    Add-AppxPackage -Path .\ItsycalForWindows_1.0.0.0_x64.msix
    ```
 
-3. Open **Command Palette → Dock settings** and enable the **Itsycal for Windows** band.
+3. Open **Command Palette в†’ Dock settings** and enable the **Itsycal for Windows** band.
 
 The build is a pre-release because it is signed with a development certificate. `winget
 install Folieson.ItsycalForWindows` becomes the primary path once a trusted (free
@@ -108,6 +108,6 @@ Read [AGENTS.md](AGENTS.md) for repository rules (human and AI contributors alik
 
 ## License
 
-MIT. See [LICENSE.txt](LICENSE.txt) — it retains the upstream ItsyCal copyright. The Windows
+MIT. See [LICENSE.txt](LICENSE.txt) вЂ” it retains the upstream ItsyCal copyright. The Windows
 extension skeleton is derived from the Microsoft PowerToys template; see
 [windows/THIRD-PARTY-NOTICES.md](windows/THIRD-PARTY-NOTICES.md) for details.

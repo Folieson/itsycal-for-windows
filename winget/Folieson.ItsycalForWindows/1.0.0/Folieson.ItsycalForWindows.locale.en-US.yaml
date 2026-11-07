@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+﻿# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
 #
 # English (en-US) metadata for Itsycal for Windows.
 #
@@ -14,11 +14,11 @@ PackageVersion: 1.0.0
 PackageLocale: en-US
 Publisher: Folieson
 PublisherUrl: https://github.com/Folieson
-PublisherSupportUrl: https://github.com/Folieson/Itsycal/issues
+PublisherSupportUrl: https://github.com/Folieson/itsycal-for-windows/issues
 PackageName: Itsycal for Windows
-PackageUrl: https://github.com/Folieson/Itsycal
+PackageUrl: https://github.com/Folieson/itsycal-for-windows
 License: MIT
-LicenseUrl: https://github.com/Folieson/Itsycal/blob/master/LICENSE.txt
+LicenseUrl: https://github.com/Folieson/itsycal-for-windows/blob/master/LICENSE.txt
 ShortDescription: Date band and month calendar for the PowerToys Command Palette Dock.
 Description: Itsycal for Windows adds an always-visible date band to the PowerToys Command Palette Dock. One click opens a 6x7 month calendar with ISO week numbers, a configurable first day of the week, and read-only events from the local Windows appointment store. No network access and no telemetry; calendar data never leaves the machine.
 Tags:
