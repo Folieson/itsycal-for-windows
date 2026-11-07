@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
 Builds, signs, and verifies the Itsycal for Windows release MSIX packages.
@@ -255,6 +255,9 @@ try {
     }
     else {
         $pfxPassword = $CertificatePassword
+        # The signing code below reads $pfxPath; without this assignment the argument list
+        # contains $null and signtool fails with a parameter-binding error.
+        $pfxPath = $CertificatePath
         $certificate = $null
         try {
             if ([string]::IsNullOrEmpty($CertificatePassword)) {
