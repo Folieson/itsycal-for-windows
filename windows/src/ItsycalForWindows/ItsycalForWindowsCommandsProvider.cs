@@ -1,11 +1,10 @@
-﻿// Copyright (c) Microsoft Corporation
+// Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-#if DEBUG
 using System;
+using System.IO;
 using System.Threading.Tasks;
-#endif
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using ItsycalForWindows.Pages;
@@ -14,8 +13,8 @@ using ItsycalForWindows.Services;
 namespace ItsycalForWindows;
 
 /// <summary>
-/// Root command provider: a top-level command that opens the calendar, and one dock band
-/// whose button shows the current date and expands into the calendar flyout.
+/// Root command provider: a top-level command that opens the calendar, update commands, and
+/// one dock band whose button shows the current date and expands into the calendar flyout.
 /// </summary>
 /// <remarks>
 /// The calendar page and the dock item are single cached instances. The host may query
@@ -29,7 +28,10 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
 
     private readonly ICommandItem[] _commands;
     private readonly SettingsManager _settingsManager = new();
-    private readonly IEventSource _eventSource = new AppointmentsEventSource();
+    private readonly UpdateSettings _updateSettings = new();
+    private readonly UpdateService _updateService;
+    private readonly IEventSource _eventSource =
+        new CompositeEventSource(new AppointmentsEventSource(), new IcsEventSource());
     private readonly CalendarPage _calendarPage;
     private readonly DockDateItem _dockItem;
 
@@ -39,6 +41,7 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
         DisplayName = "Itsycal for Windows";
         Icon = IconHelpers.FromRelativePath("Assets\\StoreLogo.png");
 
+        _updateService = new UpdateService(_updateSettings);
         _calendarPage = new CalendarPage(_settingsManager, _eventSource);
         _dockItem = new DockDateItem(_calendarPage);
 
@@ -48,12 +51,28 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
             {
                 Title = DisplayName,
                 Subtitle = "Month calendar and events",
-                MoreCommands = [new CommandContextItem(_settingsManager.Settings.SettingsPage)],
+                MoreCommands =
+                [
+                    new CommandContextItem(_settingsManager.Settings.SettingsPage),
+                    new CommandContextItem(_updateSettings.SettingsPage),
+                ],
+            },
+            new CommandItem(new UpdateActionCommand("Itsycal: check for updates", _updateService, install: false))
+            {
+                Title = "Itsycal: check for updates",
+                Subtitle = "Ask GitHub whether a newer version exists",
+                Icon = new IconInfo("\uE895"),
+            },
+            new CommandItem(new UpdateActionCommand("Itsycal: install update", _updateService, install: true))
+            {
+                Title = "Itsycal: install update",
+                Subtitle = "Download the newest release, verify it and restart the palette",
+                Icon = new IconInfo("\uE896"),
             },
         ];
 
 #if DEBUG
-        // DEBUG-only verification helpers. Release builds expose only the calendar command.
+        // DEBUG-only verification helpers. Release builds expose only the calendar and update commands.
         _commands =
         [
             .. _commands,
@@ -81,6 +100,7 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
 #endif
 
         Settings = _settingsManager.Settings;
+        StartAutoUpdateCheck();
     }
 
     public override ICommandItem[] TopLevelCommands() => _commands;
@@ -96,6 +116,135 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
     /// for command providers.
     /// </summary>
     public void DisposeResources() => _dockItem.Dispose();
+
+    /// <summary>
+    /// Background update check, gated by the update settings and the 24-hour throttle in
+    /// <see cref="UpdateService.ShouldAutoCheck"/>. When auto-install is enabled the update is
+    /// downloaded, hash-verified and handed to the detached updater, which stops the host,
+    /// installs and restarts it. Every outcome is appended to the local update log.
+    /// </summary>
+    private void StartAutoUpdateCheck()
+    {
+        if (!_updateSettings.AutoCheck || !_updateService.ShouldAutoCheck())
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var check = await _updateService.CheckAsync().ConfigureAwait(false);
+                AppendUpdateLog($"auto-check: {check.Status}: {check.Message}");
+                if (!check.HasUpdate)
+                {
+                    return;
+                }
+
+                if (!_updateSettings.AutoInstall)
+                {
+                    AppendUpdateLog("auto-check: update available; auto-install is disabled.");
+                    return;
+                }
+
+                var download = await UpdateService
+                    .DownloadAsync(check, UpdateService.CurrentArchitecture)
+                    .ConfigureAwait(false);
+                AppendUpdateLog($"auto-download: success={download.Success}: {download.Message}");
+                if (!download.Success || string.IsNullOrEmpty(download.MsixPath))
+                {
+                    return;
+                }
+
+                var apply = await UpdateService.ApplyAsync(download.MsixPath).ConfigureAwait(false);
+                AppendUpdateLog($"auto-apply: success={apply.Success}: {apply.Message}");
+            }
+            catch (Exception exception)
+            {
+                AppendUpdateLog($"auto-check failed: {exception.GetType().Name} 0x{exception.HResult:X8}");
+            }
+        });
+    }
+
+    private static void AppendUpdateLog(string message)
+    {
+        try
+        {
+            var directory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ItsycalForWindows");
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(
+                Path.Combine(directory, "update.log"),
+                $"{DateTimeOffset.Now:O} {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Diagnostics only: never break the provider because a log write failed.
+        }
+    }
+
+    /// <summary>
+    /// Runs the update check, optionally downloads and applies the update, and reports the
+    /// outcome in a toast. The check/install APIs never throw; this wrapper only guards the
+    /// synchronous bridge into the host's command callback.
+    /// </summary>
+    private sealed class UpdateActionCommand : InvokableCommand
+    {
+        private readonly string _name;
+        private readonly UpdateService _updateService;
+        private readonly bool _install;
+
+        public UpdateActionCommand(string name, UpdateService updateService, bool install)
+        {
+            _name = name;
+            _updateService = updateService;
+            _install = install;
+        }
+
+        public override string Name => _name;
+
+        public override CommandResult Invoke()
+        {
+            try
+            {
+                return CommandResult.ShowToast(RunAsync().GetAwaiter().GetResult());
+            }
+            catch (Exception exception)
+            {
+                return CommandResult.ShowToast(
+                    $"Update failed: {exception.GetType().Name} 0x{exception.HResult:X8}");
+            }
+        }
+
+        private async Task<string> RunAsync()
+        {
+            var check = await _updateService.CheckAsync().ConfigureAwait(false);
+            AppendUpdateLog($"manual-check: {check.Status}: {check.Message}");
+            if (!check.HasUpdate)
+            {
+                return check.Message;
+            }
+
+            if (!_install)
+            {
+                return $"{check.Message} Use \"Itsycal: install update\" to install it.";
+            }
+
+            var download = await UpdateService
+                .DownloadAsync(check, UpdateService.CurrentArchitecture)
+                .ConfigureAwait(false);
+            AppendUpdateLog($"manual-download: success={download.Success}: {download.Message}");
+            if (!download.Success || string.IsNullOrEmpty(download.MsixPath))
+            {
+                return download.Message;
+            }
+
+            var apply = await UpdateService.ApplyAsync(download.MsixPath).ConfigureAwait(false);
+            AppendUpdateLog($"manual-apply: success={apply.Success}: {apply.Message}");
+            return apply.Message;
+        }
+    }
 
 #if DEBUG
     /// <summary>

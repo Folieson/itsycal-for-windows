@@ -1,4 +1,4 @@
-﻿# Itsycal for Windows
+# Itsycal for Windows
 
 A calendar for the **Windows PowerToys Command Palette Dock** РІР‚вЂќ the closest Windows
 equivalent of [ItsyCal](https://github.com/sfsam/itsycal)'s menu-bar calendar.
@@ -10,19 +10,31 @@ fork relation is kept for attribution and history, not for shared code.
 
 ## Features
 
-- **Date in the Dock** РІР‚вЂќ an always-visible band at the screen edge showing today's date,
-  refreshed automatically across midnight.
-- **Month calendar** РІР‚вЂќ one click opens a flyout with a 6Р“вЂ”7 month grid, today highlighted,
-  adjacent-month days dimmed, and previous/next/today navigation.
-- **Day selection** РІР‚вЂќ click a day to see that day's events; the selected day is highlighted.
-- **Events** РІР‚вЂќ read-only events from the local Windows calendar, with time ranges, location,
-  all-day and multi-day handling; the calendar keeps working when no calendar is configured.
-- **ISO week numbers** РІР‚вЂќ optional week-number column (ISO-8601).
-- **Settings** РІР‚вЂќ dock date format, event indicator, first day of the week, week numbers,
-  applied without restarting the extension.
-- **Private by design** РІР‚вЂќ no network calls, no telemetry, calendar data never leaves the
-  machine.
+- **Date in the Dock** - an always-visible band at the screen edge showing today's date and
+  the next event today, refreshed automatically across midnight.
+- **Month calendar** - one click opens a flyout with a 6x7 month grid, today highlighted,
+  adjacent-month days dimmed, event dots, and previous/next/today navigation.
+- **Day selection** - click a day to see that day's events; the selected day is highlighted.
+- **Event details and joining** - click an event to see the full when-line (all-day and
+  multi-day aware), location, notes and a **Join meeting** action for Teams/Zoom/Google
+  Meet/KTalk-style links (validated http(s) only, opened in the default browser), plus a
+  copy-link fallback.
+- **Multiple calendar sources** - events are merged from the local Windows appointment store
+  and from any `.ics` files dropped into `%LOCALAPPDATA%\ItsycalForWindows\calendars\`. This
+  covers exported Google Calendar, Outlook/Microsoft 365, Exchange, Apple Calendar and
+  CalDAV data today; native Google/Microsoft/CalDAV providers are on the roadmap.
+- **Self-update** - checks the project's GitHub releases (24-hour throttle, opt-in
+  auto-install), shows the available version, downloads the MSIX, verifies it against
+  `SHA256SUMS.txt` and installs it through a detached updater that restarts the palette.
+  Manual `Itsycal: check for updates` / `Itsycal: install update` commands are always
+  available.
+- **ISO week numbers** - optional week-number column (ISO-8601).
+- **Settings** - dock date format, event indicator, first day of the week, week numbers,
+  update behaviour (auto-check/auto-install), applied without restarting the extension.
+- **Private by design** - no telemetry and no event content in logs; the network is used
+  only when you enable update checks or (in future) a remote calendar provider.
 
+## Requirements
 ## Requirements
 
 | Requirement | Version |
@@ -93,10 +105,25 @@ stored by Command Palette.
 
 ## Privacy
 
-The extension reads events through the read-only Windows appointment store
-(`Windows.ApplicationModel.Appointments`). It never writes to the calendar, never sends data
-anywhere, and logs no event content. Access is declared with the `appointmentsSystem`
-capability in the package manifest.
+The extension reads events from sources you choose: the read-only Windows appointment store
+(`Windows.ApplicationModel.Appointments`) and `.ics` files in your local calendar folder. It
+never writes to calendars and never logs event content.
+
+Network access is deliberately narrow and documented in
+[ADR 0002](docs/adr/0002-calendar-providers-and-network.md):
+
+- update checks query the project's GitHub releases only (and only when auto-check/manual
+  update is enabled); no telemetry, no identifiers, no calendar data;
+- future remote providers (Google Calendar, Microsoft Graph/Exchange, CalDAV) are opt-in per
+  provider, use HTTPS, and store credentials encrypted with Windows DPAPI. Until such a
+  provider is enabled, the extension makes no network requests for calendars.
+
+The Windows store access is declared with the `appointmentsSystem` capability in the package
+manifest.
+## Roadmap
+
+Provider plans (Google Calendar, Microsoft Graph/Exchange, CalDAV), the modern-UI pass and
+the distribution milestones live in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Repository layout
 
@@ -108,6 +135,7 @@ capability in the package manifest.
 | `winget/` | WinGet manifests for the MSIX release. |
 | `docs/adr/` | Architecture decision records. |
 | `docs/SIGNING.md` | Code-signing options and release secrets. |
+| `docs/ROADMAP.md` | Milestones, provider plans and the sequenced backlog. |
 
 ## Contributing
 
