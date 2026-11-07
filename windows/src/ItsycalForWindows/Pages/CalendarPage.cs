@@ -662,8 +662,8 @@ internal sealed partial class CalendarPage : ContentPage
         return new JsonObject
         {
             ["type"] = "ColumnSet",
-            // Rows sit flush against each other so the grid reads as one block.
-            ["spacing"] = GridRowSpacing,
+            // No spacing token here either: the host maps the compact token on a ColumnSet to a
+            // negative offset and the rows then overlap the weekday labels above them.
             ["columns"] = columns,
         };
     }
