@@ -12,12 +12,16 @@ namespace ItsycalForWindows.Models;
 /// <param name="End">End instant (exclusive for all-day events).</param>
 /// <param name="IsAllDay">True for all-day events.</param>
 /// <param name="Location">Optional location text.</param>
+/// <param name="OnlineMeetingLink">Optional online-meeting (Zoom/Teams/...) URL.</param>
+/// <param name="Details">Optional event description/notes.</param>
 public sealed record CalendarEvent(
     string Subject,
     DateTimeOffset Start,
     DateTimeOffset End,
     bool IsAllDay = false,
-    string? Location = null)
+    string? Location = null,
+    string? OnlineMeetingLink = null,
+    string? Details = null)
 {
     /// <summary>First local calendar day the event covers.</summary>
     public DateOnly StartDate => DateOnly.FromDateTime(Start.LocalDateTime);
@@ -47,4 +51,34 @@ public sealed record CalendarEvent(
 
     /// <summary>Short display text used by lists and cards.</summary>
     public string DisplayTitle => string.IsNullOrWhiteSpace(Subject) ? "(no title)" : Subject;
+
+    /// <summary>True when the event carries a usable http(s) meeting link.</summary>
+    public bool HasOnlineMeetingLink => TryGetOnlineMeetingUri(out _);
+
+    /// <summary>
+    /// Parses <see cref="OnlineMeetingLink"/> defensively: only absolute http(s) URIs are
+    /// accepted so a malformed calendar field cannot make the join button launch anything
+    /// unexpected.
+    /// </summary>
+    public bool TryGetOnlineMeetingUri(out Uri? uri)
+    {
+        uri = null;
+        if (string.IsNullOrWhiteSpace(OnlineMeetingLink))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(OnlineMeetingLink.Trim(), UriKind.Absolute, out var parsed))
+        {
+            return false;
+        }
+
+        if (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp)
+        {
+            return false;
+        }
+
+        uri = parsed;
+        return true;
+    }
 }
