@@ -102,4 +102,12 @@ The MSIX-only route is not a preference; it is the only route that works:
 ## Amendment 2026-11-07 — Windows-only repository
 
 The macOS application sources, Xcode project, design files, macOS build scripts and the Apple signing workflow were removed from this repository. The product repository now contains only the Windows extension, its tests, documentation and release tooling. Upstream remains at https://github.com/sfsam/itsycal and the fork relation plus the MIT copyright in `LICENSE.txt` preserve attribution; the removed sources stay in the git history. Rationale: the macOS code is not buildable or relevant here, and a lean repository is easier to review, release and submit to package managers.
+## Amendment 2026-11-08 — calendar providers and network policy
 
+The read-only Windows appointment store is no longer the only event source. A composite
+event source merges it with local ICS files today and with remote providers (Google
+Calendar, Microsoft Graph/Exchange, CalDAV) later, each behind an explicit per-provider
+opt-in. Network access is no longer forbidden outright: it is limited to self-update and
+user-enabled calendar providers, with HTTPS, no telemetry, DPAPI-protected credentials and
+no event content in logs. Details and the security follow-ups: [ADR 0002](0002-calendar-providers-and-network.md);
+the product milestones are in [docs/ROADMAP.md](../ROADMAP.md).
