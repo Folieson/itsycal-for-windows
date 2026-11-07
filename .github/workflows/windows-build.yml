@@ -75,23 +75,39 @@ jobs:
           "PACKAGE=$($msix.FullName)" | Tee-Object -FilePath 'windows\artifacts\package-path.txt'
           "MSIX_PATH=$($msix.FullName)" >> $env:GITHUB_ENV
 
-      - name: Sign the MSIX with an ephemeral development certificate
+      - name: Sign the MSIX with the development certificate
         shell: pwsh
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
         run: |
-          $cert = New-SelfSignedCertificate `
-            -Type Custom `
-            -Subject 'CN=ItsycalForWindows-Dev' `
-            -KeyUsage DigitalSignature `
-            -FriendlyName 'Itsycal for Windows dev signing' `
-            -CertStoreLocation 'Cert:\CurrentUser\My' `
-            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+          $pfxPath = Join-Path $PWD 'windows\artifacts\devcert.pfx'
+          if ($env:SIGNING_PFX_BASE64) {
+            Write-Output 'Signing with the repository development certificate.'
+            [System.IO.File]::WriteAllBytes($pfxPath, [System.Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+            $password = $env:SIGNING_PFX_PASSWORD
+          }
+          else {
+            Write-Output 'No SIGNING_PFX_BASE64 secret: creating an ephemeral development certificate.'
+            $cert = New-SelfSignedCertificate `
+              -Type Custom `
+              -Subject 'CN=ItsycalForWindows-Dev' `
+              -KeyUsage DigitalSignature `
+              -FriendlyName 'Itsycal for Windows dev signing' `
+              -CertStoreLocation 'Cert:\CurrentUser\My' `
+              -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+            $secure = ConvertTo-SecureString -String $env:DEV_CERT_PASSWORD -Force -AsPlainText
+            Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $secure | Out-Null
+            $password = $env:DEV_CERT_PASSWORD
+          }
 
-          $secure = ConvertTo-SecureString -String $env:DEV_CERT_PASSWORD -Force -AsPlainText
-          Export-PfxCertificate -Cert $cert -FilePath 'windows\artifacts\devcert.pfx' -Password $secure | Out-Null
-          Export-Certificate -Cert $cert -FilePath 'windows\artifacts\devcert.cer' | Out-Null
+          # Publish the matching public certificate next to the package so anyone can verify
+          # which certificate signed the artifact.
+          $publicCert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfxPath, $password)
+          Export-Certificate -Cert $publicCert -FilePath 'windows\artifacts\devcert.cer' | Out-Null
+          Write-Output "Signing certificate thumbprint: $($publicCert.Thumbprint)"
 
-          # Trust the ephemeral certificate in the runner's user store so the package can
-          # be verified after signing (the same step a developer runs locally).
+          # Trust the certificate in the runner's user store so the package can be verified.
           Import-Certificate -FilePath 'windows\artifacts\devcert.cer' -CertStoreLocation 'Cert:\CurrentUser\TrustedPeople' | Out-Null
 
           $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter 'signtool.exe' -ErrorAction SilentlyContinue |
@@ -100,10 +116,10 @@ jobs:
             Select-Object -First 1
           if (-not $signtool) { Write-Error 'signtool.exe not found in the Windows SDK'; exit 1 }
 
-          & $signtool.FullName sign /fd SHA256 /f 'windows\artifacts\devcert.pfx' /p $env:DEV_CERT_PASSWORD "$env:MSIX_PATH"
+          & $signtool.FullName sign /fd SHA256 /f $pfxPath /p $password "$env:MSIX_PATH"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Output "Signed package: $env:MSIX_PATH"
-          Remove-Item 'windows\artifacts\devcert.pfx' -Force
+          Remove-Item $pfxPath -Force
 
       - name: Upload the development package
         uses: actions/upload-artifact@v4
