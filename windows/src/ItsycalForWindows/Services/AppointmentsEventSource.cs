@@ -189,7 +189,9 @@ internal sealed class AppointmentsEventSource : IEventSource
                 start,
                 end,
                 appointment.AllDay,
-                string.IsNullOrWhiteSpace(location) ? null : location!.Trim()));
+                string.IsNullOrWhiteSpace(location) ? null : location!.Trim(),
+                string.IsNullOrWhiteSpace(appointment.OnlineMeetingLink) ? null : appointment.OnlineMeetingLink.Trim(),
+                string.IsNullOrWhiteSpace(appointment.Details) ? null : appointment.Details.Trim()));
         }
 
         events.Sort(static (left, right) => left.Start.CompareTo(right.Start));

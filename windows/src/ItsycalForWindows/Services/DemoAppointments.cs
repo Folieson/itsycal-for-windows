@@ -1,4 +1,4 @@
-﻿#if DEBUG
+#if DEBUG
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -229,7 +229,8 @@ internal static class DemoAppointments
                 TimeSpan.FromMinutes(45),
                 "Teams",
                 "Reviewing the new flyout with the team",
-                IsAllDay: false),
+                IsAllDay: false,
+                OnlineMeetingLink: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_demo%40thread.v2/0"),
             new DemoSpec(
                 "Lunch with the team",
                 local(today).AddHours(13),
@@ -241,9 +242,10 @@ internal static class DemoAppointments
                 "Sprint planning",
                 local(today.AddDays(1)).AddHours(9) + TimeSpan.FromMinutes(30),
                 TimeSpan.FromMinutes(90),
-                null,
-                null,
-                IsAllDay: false),
+                "Online",
+                "Planning the next sprint.",
+                IsAllDay: false,
+                OnlineMeetingLink: "https://zoom.us/j/1234567890"),
             new DemoSpec(
                 "Conference day",
                 local(today.AddDays(1)),
@@ -269,6 +271,7 @@ internal static class DemoAppointments
         AllDay = spec.IsAllDay,
         Location = spec.Location ?? string.Empty,
         Details = spec.Details ?? string.Empty,
+        OnlineMeetingLink = spec.OnlineMeetingLink ?? string.Empty,
     };
 
     private static async Task<Dictionary<string, string>> ReadLocalIdsBySubjectAsync(AppointmentCalendar calendar)
@@ -327,7 +330,8 @@ internal static class DemoAppointments
         TimeSpan Duration,
         string? Location,
         string? Details,
-        bool IsAllDay);
+        bool IsAllDay,
+        string? OnlineMeetingLink = null);
 
     private sealed class DemoStoreFile
     {
