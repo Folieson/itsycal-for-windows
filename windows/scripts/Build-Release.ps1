@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
 Builds, signs, and verifies the Itsycal for Windows release MSIX packages.
@@ -20,10 +20,10 @@ Signing modes:
                     before they can install the package.
 
 .PARAMETER Version
-Marketing version, for example 1.0.0. The four-part version in
-Package.appxmanifest must match it (1.0.0 maps to 1.0.0.0). The MSIX identity is
-release-sensitive: bump the manifest version deliberately in the release commit
-instead of rewriting the manifest during the build.
+Marketing version, for example 1.0.0. The package identity version is derived from it
+(1.0.0 maps to 1.0.0.0). The script stamps Package.appxmanifest and the project metadata
+to the derived version before packaging, so no manual manifest bump is required; the
+release workflow passes the version parsed from the git tag.
 
 .PARAMETER CertificatePath
 Path to the .pfx code-signing certificate. Its subject must match the Publisher in
@@ -212,8 +212,14 @@ $fourPartVersion = ConvertTo-FourPartVersion -Value $Version
 $identity = Get-ManifestIdentity -Path $manifestPath
 $manifestVersion = ConvertTo-FourPartVersion -Value $identity.Version
 if ($manifestVersion -ne $fourPartVersion) {
-    throw "Package.appxmanifest Identity Version is $($identity.Version) but -Version $Version maps to $fourPartVersion. " +
-        'Bump the manifest version in the same change; changing the MSIX identity is release-sensitive.'
+    # The version comes from the tag (release) or the caller; stamp it instead of asking a
+    # human to edit the manifest and forget the bump.
+    & (Join-Path $PSScriptRoot 'Set-PackageVersion.ps1') -Version $fourPartVersion
+    $identity = Get-ManifestIdentity -Path $manifestPath
+    $manifestVersion = ConvertTo-FourPartVersion -Value $identity.Version
+    if ($manifestVersion -ne $fourPartVersion) {
+        throw "Could not stamp Package.appxmanifest Identity Version to $fourPartVersion."
+    }
 }
 if (-not (Test-Path -LiteralPath $project -PathType Leaf)) {
     throw "Extension project not found: $project"

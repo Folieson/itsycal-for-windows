@@ -1,4 +1,4 @@
-﻿# Itsycal for Windows вЂ” extension source
+# Itsycal for Windows вЂ” extension source
 
 This folder contains the Windows product: a PowerToys Command Palette extension written in
 C#/.NET 10. It contributes a dock band with the current date and a flyout month calendar
@@ -53,14 +53,31 @@ with `signtool`, verifies trusted signatures, and writes everything to
 - `build-info.json` вЂ” package identity and per-architecture `sha256`/`signatureSha256`
   values used to fill in the WinGet manifest.
 
-`-Version` must match the `Identity Version` in `Package.appxmanifest` (`1.0.0` maps to
-`1.0.0.0`); the MSIX identity is release-sensitive, so bump the manifest deliberately.
-Certificate options, required GitHub secrets, and the WinGet submission steps are in
+`-Version` is the marketing version (`1.0.0` maps to the identity version `1.0.0.0`). The
+script stamps `Package.appxmanifest` and the project metadata to the derived version before
+packaging, so there is no separate manifest bump to forget. Certificate options, required
+GitHub secrets, and the WinGet submission steps are in
 [docs/SIGNING.md](../docs/SIGNING.md).
 
 The release pipeline (`.github/workflows/release.yml`) runs this script on a `v*` tag. With
 `TRUSTED_SIGNING_PFX_BASE64`/`TRUSTED_SIGNING_PFX_PASSWORD` set it publishes a signed release; without
 them it publishes a self-signed development prerelease and skips the WinGet submission.
+
+## Package versioning
+
+The identity version is derived, never hand-maintained:
+
+- **Release**: the tag is the source of truth. `v1.2.3` becomes package version `1.2.3.0`;
+  the release workflow stamps the manifest, the project metadata and the WinGet manifests
+  before packaging.
+- **Development build**: `.github/workflows/windows-build.yml` stamps the revision from the
+  GitHub run number (`1.0.0.<run>`), so every artifact is newer than the previous one and
+  `Add-AppxPackage` upgrades in place instead of failing with `0x80073CFB`.
+- **Local**: `.\windows\scripts\Set-PackageVersion.ps1 -Version 1.2.3.0` (or
+  `-Revision 42` to keep the current base) before building.
+
+The committed manifest keeps the current release base; CI stamps a copy in the runner's
+workspace and never commits it.
 
 ## Install a development build (MSIX)
 
@@ -74,8 +91,9 @@ gh run download <run-id> -n itsycal-for-windows-dev -D .\pkg
 .\windows\scripts\deploy-local.ps1 -MsixPath .\pkg\ItsycalForWindows_*.msix -CertPath .\pkg\devcert.cer
 ```
 
-The development certificate is ephemeral (one per CI run); re-trust the matching `.cer` when
-you install a package from a different run.
+The development certificate is the repository's persistent development certificate; trust
+its `.cer` once (see the root README) and then every CI build installs and upgrades in
+place, because each build carries a higher package revision.
 
 ## Source map
 
