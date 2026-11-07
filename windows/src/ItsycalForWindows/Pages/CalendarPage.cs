@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -214,7 +214,7 @@ internal sealed partial class CalendarPage : ContentPage
 
     /// <summary>
     /// Shows <paramref name="month"/> and keeps the selection on the same day-of-month, clamped
-    /// to the target month's length (for example 31 January → 28 February). The card reloads its
+    /// to the target month's length (for example 31 January в†’ 28 February). The card reloads its
     /// events because the visible range moved.
     /// </summary>
     private void Navigate(CalendarMonth month)
@@ -570,32 +570,18 @@ internal sealed partial class CalendarPage : ContentPage
     {
         var eventCounts = EventRange.CountPerDay(events, month.VisibleStart, month.VisibleEndExclusive);
         var gridMonth = eventCounts.Count == 0 ? month : month.WithEventCounts(eventCounts);
+        var selectedEvents = GetEventsForDay(events, month, selectedDate);
 
         var body = new JsonArray
         {
-            // The month and the year are the card's only large heading; everything below steps
-            // down to small, quiet labels and uniform day numbers.
-            (JsonNode)TextBlock(
-                month.Title,
-                size: "large",
-                weight: "bolder",
-                wrap: true),
-            (JsonNode)BuildWeekdayHeader(gridMonth.WeekStart, showWeekNumbers),
+            (JsonNode)BuildAgendaHeader(gridMonth, selectedDate),
+            (JsonNode)BuildMonthPanel(gridMonth, showWeekNumbers, selectedDate),
         };
-
-        foreach (var week in gridMonth.Weeks)
-        {
-            body.Add((JsonNode)BuildWeekRow(week, showWeekNumbers, selectedDate));
-        }
 
         // The event source may return events that started before the visible range (its query
         // uses a lookback for multi-day events). GroupByDay projects them onto the visible days
         // and clips the projection, so the section only needs the selected day's group.
-        AddEventsSection(
-            body,
-            selectedDate,
-            GetEventsForDay(events, month, selectedDate),
-            showLoading);
+        AddEventsSection(body, selectedDate, selectedEvents, showLoading);
 
         var card = new JsonObject
         {
@@ -616,6 +602,70 @@ internal sealed partial class CalendarPage : ContentPage
         };
 
         return card.ToJsonString();
+    }
+
+    /// <summary>
+    /// The card's visual anchor: the selected day as a large accent number beside the month and
+    /// the selected weekday. This is the one deliberately loud element; everything below is quiet
+    /// so the eye lands on "which day am I looking at" first.
+    /// </summary>
+    private static JsonObject BuildAgendaHeader(CalendarMonth month, DateOnly selectedDate)
+    {
+        var culture = CultureInfo.CurrentCulture;
+        var weekday = culture.TextInfo.ToTitleCase(culture.DateTimeFormat.GetDayName(selectedDate.DayOfWeek));
+        var subtitle = string.Concat(
+            weekday,
+            EventSeparator,
+            selectedDate.ToString("d MMMM yyyy", culture));
+
+        return new JsonObject
+        {
+            ["type"] = "ColumnSet",
+            ["verticalContentAlignment"] = "center",
+            ["columns"] = new JsonArray
+            {
+                (JsonNode)BuildColumn(
+                    "auto",
+                    TextBlock(
+                        selectedDate.Day.ToString(culture),
+                        size: "extraLarge",
+                        color: "accent",
+                        weight: "bolder",
+                        alignment: "center")),
+                (JsonNode)BuildColumn(
+                    "stretch",
+                    new JsonArray
+                    {
+                        (JsonNode)TextBlock(month.Title, size: "medium", weight: "bolder", wrap: true),
+                        (JsonNode)TextBlock(subtitle, size: "small", subtle: true, spacing: "none", wrap: true),
+                    }),
+            },
+        };
+    }
+
+    /// <summary>
+    /// The month grid sits on its own rounded emphasis surface, which gives the card depth without
+    /// introducing borders: one filled panel for the calendar, one card per event.
+    /// </summary>
+    private static JsonObject BuildMonthPanel(CalendarMonth month, bool showWeekNumbers, DateOnly selectedDate)
+    {
+        var content = new JsonArray
+        {
+            (JsonNode)BuildWeekdayHeader(month.WeekStart, showWeekNumbers),
+        };
+
+        foreach (var week in month.Weeks)
+        {
+            content.Add((JsonNode)BuildWeekRow(week, showWeekNumbers, selectedDate));
+        }
+
+        return new JsonObject
+        {
+            ["type"] = "Container",
+            ["style"] = "emphasis",
+            ["roundedCorners"] = true,
+            ["items"] = content,
+        };
     }
 
     private static JsonObject BuildWeekdayHeader(DayOfWeek weekStart, bool showWeekNumbers)
@@ -780,7 +830,7 @@ internal sealed partial class CalendarPage : ContentPage
 
         foreach (var item in events)
         {
-            body.Add((JsonNode)BuildEventRow(item, selectedDate));
+            body.Add((JsonNode)BuildEventCard(item, selectedDate));
         }
     }
 
@@ -800,11 +850,11 @@ internal sealed partial class CalendarPage : ContentPage
     }
 
     /// <summary>
-    /// One event row: a quiet time column and the title column. The times describe the slice of
-    /// the event that falls on <paramref name="date"/>, so a multi-day event shows the part that
-    /// belongs to the selected day (for example 22:00–24:00 on its first day).
+    /// One event card on its own rounded surface: an accent time gutter and the title column. The
+    /// times describe the slice of the event that falls on <paramref name="date"/>, so a multi-day
+    /// event shows the part that belongs to the selected day.
     /// </summary>
-    private static JsonObject BuildEventRow(CalendarEvent item, DateOnly date)
+    private static JsonObject BuildEventCard(CalendarEvent item, DateOnly date)
     {
         var slice = EventRange.ClipToRange(item, date, date.AddDays(1)) ?? item;
         var timeText = item.IsAllDay ? AllDayLabel : FormatTimeRange(slice);
@@ -812,25 +862,36 @@ internal sealed partial class CalendarPage : ContentPage
 
         var details = new JsonArray
         {
-            (JsonNode)TextBlock(item.DisplayTitle, wrap: true),
+            (JsonNode)TextBlock(item.DisplayTitle, weight: "bolder", wrap: true),
         };
 
         if (!string.IsNullOrEmpty(metaText))
         {
             // Location and multi-day context stay a second, quieter line under the title.
-            details.Add((JsonNode)TextBlock(metaText, size: "small", subtle: true, wrap: true));
+            details.Add((JsonNode)TextBlock(metaText, size: "small", subtle: true, spacing: "none", wrap: true));
         }
+
+        var row = new JsonObject
+        {
+            ["type"] = "ColumnSet",
+            ["verticalContentAlignment"] = "center",
+            ["columns"] = new JsonArray
+            {
+                // Accent time gutter: the only coloured text in the event card.
+                (JsonNode)BuildColumn(
+                    "auto",
+                    TextBlock(timeText, size: "small", color: "accent", weight: "bolder")),
+                (JsonNode)BuildColumn("stretch", details),
+            },
+        };
 
         return new JsonObject
         {
-            ["type"] = "ColumnSet",
+            ["type"] = "Container",
+            ["style"] = "emphasis",
+            ["roundedCorners"] = true,
             ["spacing"] = RowSpacing,
-            ["columns"] = new JsonArray
-            {
-                // Auto-width time gutter: secondary color keeps the title as the row's focus.
-                (JsonNode)BuildColumn("auto", TextBlock(timeText, size: "small", subtle: true)),
-                (JsonNode)BuildColumn("stretch", details),
-            },
+            ["items"] = new JsonArray { (JsonNode)row },
         };
     }
 
