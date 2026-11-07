@@ -42,8 +42,8 @@ name) вЂ” do it deliberately in its own PR, together with the WinGet manifes
 
 | Secret | Required | Purpose |
 |---|---|---|
-| `SIGNING_PFX_BASE64` | for a trusted release | Base64 of the code-signing `.pfx`. Its presence switches `.github/workflows/release.yml` from a self-signed development build to a signed release. |
-| `SIGNING_PFX_PASSWORD` | with `SIGNING_PFX_BASE64` | Password of that `.pfx`. |
+| `TRUSTED_SIGNING_PFX_BASE64` | for a trusted release | Base64 of the code-signing `.pfx`. Its presence switches `.github/workflows/release.yml` from a self-signed development build to a signed release. |
+| `TRUSTED_SIGNING_PFX_PASSWORD` | with `TRUSTED_SIGNING_PFX_BASE64` | Password of that `.pfx`. |
 | `WINGET_PAT` | optional | GitHub token allowed to fork `microsoft/winget-pkgs` and open the WingetCreate pull request. Without it the workflow still attaches the prepared manifests to the release. |
 
 Set them with the GitHub CLI (never commit the files):
@@ -58,8 +58,8 @@ Export-PfxCertificate -Cert $cert -FilePath itsycal-signing.pfx `
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('itsycal-signing.pfx')) |
   Set-Content -NoNewline signing-pfx.b64
 
-gh secret set SIGNING_PFX_BASE64   --repo Folieson/itsycal-for-windows < signing-pfx.b64
-gh secret set SIGNING_PFX_PASSWORD --repo Folieson/itsycal-for-windows
+gh secret set TRUSTED_SIGNING_PFX_BASE64   --repo Folieson/itsycal-for-windows < signing-pfx.b64
+gh secret set TRUSTED_SIGNING_PFX_PASSWORD --repo Folieson/itsycal-for-windows
 gh secret set WINGET_PAT           --repo Folieson/itsycal-for-windows
 ```
 
