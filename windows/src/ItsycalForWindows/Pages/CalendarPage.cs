@@ -629,7 +629,7 @@ internal sealed partial class CalendarPage : ContentPage
                     "auto",
                     TextBlock(
                         selectedDate.Day.ToString(culture),
-                        size: "large",
+                        size: "extraLarge",
                         color: "accent",
                         weight: "bolder",
                         alignment: "center")),
