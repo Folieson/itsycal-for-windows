@@ -75,12 +75,20 @@ internal sealed class AppointmentsEventSource : IEventSource
         try
         {
             var events = await QueryAsync(fromInclusive, toExclusive, cancellationToken).ConfigureAwait(false);
+#if DEBUG
+            CalendarAccessProbe.Log(
+                $"events: read {events.Count} for {fromInclusive:yyyy-MM-dd}..{toExclusive:yyyy-MM-dd}");
+#endif
             StoreInCache(fromInclusive, toExclusive, events);
             return events;
         }
         catch (OperationCanceledException)
         {
             // Cancellation means the UI moved on. Report no data and keep the previous cache.
+#if DEBUG
+            CalendarAccessProbe.Log(
+                $"events: read cancelled for {fromInclusive:yyyy-MM-dd}..{toExclusive:yyyy-MM-dd}");
+#endif
             return Array.Empty<CalendarEvent>();
         }
         catch (Exception exception)
@@ -89,6 +97,10 @@ internal sealed class AppointmentsEventSource : IEventSource
             // or provider failure), IOException, InvalidOperationException and WinRT projection
             // failures all mean the same thing to the UI: no events right now. The empty result
             // is cached briefly so a persistently failing store is not called on every render.
+#if DEBUG
+            CalendarAccessProbe.Log(
+                $"events: read failed: {exception.GetType().Name} 0x{exception.HResult:X8}: {exception.Message}");
+#endif
             Debug.WriteLine($"[ItsycalForWindows] Appointment store unavailable: {exception.GetType().Name}");
             StoreInCache(fromInclusive, toExclusive, Array.Empty<CalendarEvent>());
             return Array.Empty<CalendarEvent>();
