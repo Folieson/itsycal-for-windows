@@ -73,8 +73,16 @@ staged WinGet manifests in [`winget/`](winget) already carry the release URLs an
 
 | Command Palette | Calendar flyout |
 |---|---|
-| ![Itsycal for Windows in Command Palette search](docs/screenshots/palette-search.png) | ![Month calendar with today selected, event dots and the selected day's events](docs/screenshots/calendar-flyout.png) |
+| ![Itsycal for Windows in Command Palette search](docs/screenshots/palette-search.png) | ![Month calendar with event dots and the selected day events](docs/screenshots/calendar-flyout.png) |
 
+| Event details | |
+|---|---|
+| ![Inline event details with the selected event expanded below the agenda](docs/screenshots/event-details.png) | Clicking an event expands its details under the agenda: full when-line, location, notes and the Join meeting / Copy link actions for events that carry a meeting URL. |
+
+| Command Palette | Calendar flyout |
+|---|---|
+| ![Itsycal for Windows in Command Palette search](docs/screenshots/palette-search.png) | ![Month calendar with today selected, event dots and the selected day's events](docs/screenshots/calendar-flyout.png) |
+\n\|\ Event\ details\ \|\ \|\n\|---\|---\|\n\|\ !\[Inline\ event\ details\ with\ the\ selected\ event\ expanded\ below\ the\ agenda]\(docs/screenshots/event-details\.png\)\ \|\ Clicking\ an\ event\ expands\ its\ details\ under\ the\ agenda:\ full\ when-line,\ location,\ notes\ and\ the\ Join\ meeting\ /\ Copy\ link\ actions\ for\ events\ that\ carry\ a\ meeting\ URL\.\ \|\n
 Captured from the installed 1.0.0 development build. The extension follows the Windows
 display language, the first day of week and the week-number setting: the screenshots above
 show a Russian locale and weeks starting on Monday. The flyout marks days that have events
