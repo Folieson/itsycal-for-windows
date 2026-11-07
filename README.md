@@ -51,7 +51,8 @@ that is self-contained (it carries its own .NET runtime, no separate installatio
 3. Open **Command Palette → Dock settings** and enable the **Itsycal for Windows** band.
 
 Newer builds install over the previous package in place: each build stamps a higher package
-revision, so no uninstall step is needed. The build is a pre-release because it is signed
+revision, so no uninstall step is needed. Close Command Palette before installing an upgrade —
+the running host holds the package files. The build is a pre-release because it is signed
 with a development certificate. `winget install Folieson.ItsycalForWindows` becomes the
 primary path once a trusted (free open-source) code-signing certificate is in place; the
 staged WinGet manifests in [`winget/`](winget) already carry the release URLs and hashes, and
