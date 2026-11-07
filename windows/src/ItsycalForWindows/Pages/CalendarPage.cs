@@ -631,7 +631,7 @@ internal sealed partial class CalendarPage : ContentPage
         for (var column = 0; column < WeekRow.DayCount; column++)
         {
             var dayOfWeek = (DayOfWeek)(((int)weekStart + column) % WeekRow.DayCount);
-            columns.Add((JsonNode)BuildColumn("stretch", TextBlock(shortestDayNames[(int)dayOfWeek], size: "small", subtle: true, alignment: "center")));
+            columns.Add((JsonNode)BuildColumn("stretch", TextBlock(shortestDayNames[(int)dayOfWeek], subtle: true, weight: "bolder", alignment: "center")));
         }
 
         return new JsonObject
@@ -690,7 +690,9 @@ internal sealed partial class CalendarPage : ContentPage
 
         if (isSelected)
         {
-            color = "accent";
+            // The accent surface supplies the contrast colours, so the day number keeps the
+            // default text colour instead of painting accent-on-accent.
+            color = null;
             weight = "bolder";
         }
 
