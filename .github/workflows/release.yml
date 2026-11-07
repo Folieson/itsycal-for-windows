@@ -86,9 +86,12 @@ jobs:
         env:
           TRUSTED_SIGNING_PFX_BASE64: ${{ secrets.TRUSTED_SIGNING_PFX_BASE64 }}
           TRUSTED_SIGNING_PFX_PASSWORD: ${{ secrets.TRUSTED_SIGNING_PFX_PASSWORD }}
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
         run: |
           $ErrorActionPreference = 'Stop'
           $pfxPath = $null
+          $devPfxPath = $null
           $arguments = @{ Version = $env:VERSION; Architectures = @('x64', 'arm64') }
           if ($env:BUILD_KIND -eq 'trusted') {
             $pfxPath = Join-Path $env:RUNNER_TEMP 'itsycal-release.pfx'
@@ -96,8 +99,18 @@ jobs:
             $arguments.CertificatePath = $pfxPath
             $arguments.CertificatePassword = $env:TRUSTED_SIGNING_PFX_PASSWORD
           }
+          elseif ($env:SIGNING_PFX_BASE64) {
+            # Development prerelease, signed by the persistent development certificate so
+            # developers who trusted its .cer can install every build without an admin step.
+            Write-Host 'Using the persistent development certificate for a self-signed development release.'
+            $devPfxPath = Join-Path $env:RUNNER_TEMP 'itsycal-dev.pfx'
+            [System.IO.File]::WriteAllBytes($devPfxPath, [System.Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+            $arguments.CertificatePath = $devPfxPath
+            $arguments.CertificatePassword = $env:SIGNING_PFX_PASSWORD
+            $arguments.SkipSignatureVerification = $true
+          }
           else {
-            Write-Host 'No TRUSTED_SIGNING_PFX_BASE64 secret: building a self-signed development release.'
+            Write-Host 'No signing secrets: building a self-signed development release with an ephemeral certificate.'
             $arguments.SelfSigned = $true
           }
           try {
@@ -105,10 +118,20 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               throw "Build-Release.ps1 failed (exit code $LASTEXITCODE)."
             }
+            if ($devPfxPath) {
+              # Attach the public certificate next to the packages; the release notes link it.
+              $publicCert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($devPfxPath, $env:SIGNING_PFX_PASSWORD)
+              $certAssetName = 'ItsycalForWindows_{0}_dev.cer' -f $env:PACKAGE_VERSION
+              $releaseDir = Join-Path 'windows/artifacts/release' $env:VERSION
+              Export-Certificate -Cert $publicCert -FilePath (Join-Path $releaseDir $certAssetName) -Force | Out-Null
+              Write-Host "Exported the development certificate: $certAssetName"
+            }
           }
           finally {
-            if ($pfxPath -and (Test-Path -LiteralPath $pfxPath)) {
-              Remove-Item -LiteralPath $pfxPath -Force
+            foreach ($path in @($pfxPath, $devPfxPath)) {
+              if ($path -and (Test-Path -LiteralPath $path)) {
+                Remove-Item -LiteralPath $path -Force
+              }
             }
           }
 
