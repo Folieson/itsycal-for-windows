@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
 Builds, signs, and verifies the Itsycal for Windows release MSIX packages.
@@ -31,7 +31,7 @@ Package.appxmanifest, otherwise Windows rejects the package at install time.
 
 .PARAMETER CertificatePassword
 Password for -CertificatePath. The script never prints it; in CI pass it through
-the SIGNING_PFX_PASSWORD secret.
+the TRUSTED_SIGNING_PFX_PASSWORD secret.
 
 .PARAMETER SelfSigned
 Generate an ephemeral self-signed development certificate. Cannot be combined
@@ -48,7 +48,7 @@ Build configuration. Default: Release.
 
 .EXAMPLE
 ./windows/scripts/Build-Release.ps1 -Version 1.0.0 `
-  -CertificatePath ./itsycal-signing.pfx -CertificatePassword $env:SIGNING_PFX_PASSWORD
+  -CertificatePath ./itsycal-signing.pfx -CertificatePassword $env:TRUSTED_SIGNING_PFX_PASSWORD
 #>
 [CmdletBinding()]
 param(

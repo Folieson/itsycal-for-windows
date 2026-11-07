@@ -1,4 +1,4 @@
-name: release
+﻿name: release
 
 # Builds signed MSIX packages for x64 and arm64 from a v* tag, publishes a GitHub
 # release, and prepares the WinGet manifests for submission.
@@ -11,8 +11,8 @@ name: release
 # prepare a WinGet submission.
 #
 # Required secrets for a signed release:
-#   SIGNING_PFX_BASE64    base64 of the .pfx with a trusted code-signing certificate
-#   SIGNING_PFX_PASSWORD  password of that .pfx
+#   TRUSTED_SIGNING_PFX_BASE64    base64 of the .pfx with a trusted code-signing certificate
+#   TRUSTED_SIGNING_PFX_PASSWORD  password of that .pfx
 # Optional secret:
 #   WINGET_PAT            GitHub token that may fork microsoft/winget-pkgs and open
 #                         the WingetCreate submission pull request
@@ -54,7 +54,7 @@ jobs:
         id: release_info
         shell: pwsh
         env:
-          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          TRUSTED_SIGNING_PFX_BASE64: ${{ secrets.TRUSTED_SIGNING_PFX_BASE64 }}
           WINGET_PAT: ${{ secrets.WINGET_PAT }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -70,7 +70,7 @@ jobs:
             throw "Tag $tag does not match Package.appxmanifest Identity Version $packageVersion. Bump the manifest version deliberately in the release commit; the MSIX identity is release-sensitive."
           }
 
-          $buildKind = if ([string]::IsNullOrWhiteSpace($env:SIGNING_PFX_BASE64)) { 'dev' } else { 'trusted' }
+          $buildKind = if ([string]::IsNullOrWhiteSpace($env:TRUSTED_SIGNING_PFX_BASE64)) { 'dev' } else { 'trusted' }
           $wingetEnabled = if ([string]::IsNullOrWhiteSpace($env:WINGET_PAT)) { 'false' } else { 'true' }
           "VERSION=$version" >> $env:GITHUB_ENV
           "PACKAGE_VERSION=$packageVersion" >> $env:GITHUB_ENV
@@ -82,20 +82,20 @@ jobs:
       - name: Build and sign the MSIX packages
         shell: pwsh
         env:
-          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
-          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+          TRUSTED_SIGNING_PFX_BASE64: ${{ secrets.TRUSTED_SIGNING_PFX_BASE64 }}
+          TRUSTED_SIGNING_PFX_PASSWORD: ${{ secrets.TRUSTED_SIGNING_PFX_PASSWORD }}
         run: |
           $ErrorActionPreference = 'Stop'
           $pfxPath = $null
           $arguments = @{ Version = $env:VERSION; Architectures = @('x64', 'arm64') }
           if ($env:BUILD_KIND -eq 'trusted') {
             $pfxPath = Join-Path $env:RUNNER_TEMP 'itsycal-release.pfx'
-            [System.IO.File]::WriteAllBytes($pfxPath, [System.Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+            [System.IO.File]::WriteAllBytes($pfxPath, [System.Convert]::FromBase64String($env:TRUSTED_SIGNING_PFX_BASE64))
             $arguments.CertificatePath = $pfxPath
-            $arguments.CertificatePassword = $env:SIGNING_PFX_PASSWORD
+            $arguments.CertificatePassword = $env:TRUSTED_SIGNING_PFX_PASSWORD
           }
           else {
-            Write-Host 'No SIGNING_PFX_BASE64 secret: building a self-signed development release.'
+            Write-Host 'No TRUSTED_SIGNING_PFX_BASE64 secret: building a self-signed development release.'
             $arguments.SelfSigned = $true
           }
           try {
@@ -237,7 +237,7 @@ jobs:
                 "Add-AppxPackage .\ItsycalForWindows_${packageVersion}_x64.msix",
                 '```',
                 '',
-                'A self-signed MSIX cannot be installed via `winget install`; cut a release with `SIGNING_PFX_BASE64`/`SIGNING_PFX_PASSWORD` set to publish a trusted build.'
+                'A self-signed MSIX cannot be installed via `winget install`; cut a release with `TRUSTED_SIGNING_PFX_BASE64`/`TRUSTED_SIGNING_PFX_PASSWORD` set to publish a trusted build.'
             )
           }
           $lines += @(
