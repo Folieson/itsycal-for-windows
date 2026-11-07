@@ -2,6 +2,10 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+#if DEBUG
+using System;
+using System.Threading.Tasks;
+#endif
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 using ItsycalForWindows.Pages;
@@ -48,6 +52,32 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
             },
         ];
 
+#if DEBUG
+        // DEBUG-only verification helpers. Release builds expose only the calendar command.
+        _commands =
+        [
+            .. _commands,
+            new CommandItem(new DebugDemoCommand("Itsycal: add demo events", DemoAppointments.CreateAsync))
+            {
+                Title = "Itsycal: add demo events",
+                Subtitle = "DEBUG: create five demo appointments in the Windows appointment store",
+                Icon = new IconInfo("\uE710"),
+            },
+            new CommandItem(new DebugDemoCommand("Itsycal: remove demo events", DemoAppointments.RemoveAsync))
+            {
+                Title = "Itsycal: remove demo events",
+                Subtitle = "DEBUG: delete the demo calendar, its appointments and the recorded list",
+                Icon = new IconInfo("\uE74D"),
+            },
+            new CommandItem(new DebugDemoCommand("Itsycal: probe calendar access", CalendarAccessProbe.DescribeAsync))
+            {
+                Title = "Itsycal: probe calendar access",
+                Subtitle = "DEBUG: log which appointment-store access levels are granted",
+                Icon = new IconInfo("\uE9D9"),
+            },
+        ];
+#endif
+
         Settings = _settingsManager.Settings;
     }
 
@@ -64,4 +94,37 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
     /// for command providers.
     /// </summary>
     public void DisposeResources() => _dockItem.Dispose();
+
+#if DEBUG
+    /// <summary>
+    /// DEBUG-only command that runs one of the demo diagnostics and reports its short result in a
+    /// toast. The detailed outcome is written to the demo-access.log by the diagnostics themselves.
+    /// </summary>
+    private sealed class DebugDemoCommand : InvokableCommand
+    {
+        private readonly string _name;
+        private readonly Func<Task<string>> _action;
+
+        public DebugDemoCommand(string name, Func<Task<string>> action)
+        {
+            _name = name;
+            _action = action;
+        }
+
+        public override string Name => _name;
+
+        public override CommandResult Invoke()
+        {
+            try
+            {
+                return CommandResult.ShowToast(_action().GetAwaiter().GetResult());
+            }
+            catch (Exception exception)
+            {
+                return CommandResult.ShowToast(
+                    $"Demo command failed: {exception.GetType().Name} 0x{exception.HResult:X8}");
+            }
+        }
+    }
+#endif
 }
