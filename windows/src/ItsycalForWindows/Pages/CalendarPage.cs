@@ -637,7 +637,9 @@ internal sealed partial class CalendarPage : ContentPage
         return new JsonObject
         {
             ["type"] = "ColumnSet",
-            ["spacing"] = GridSpacing,
+            // No explicit spacing here: the host collapses the weekday label row to a clipped
+            // sliver when a ColumnSet carries a spacing token. The default body spacing already
+            // separates the heading from the labels.
             ["columns"] = columns,
         };
     }
