@@ -62,6 +62,10 @@ param(
 
     [switch]$SelfSigned,
 
+    # Development releases are signed with a persistent development certificate that the
+    # runner does not trust; skip the Authenticode verification in that mode.
+    [switch]$SkipSignatureVerification,
+
     [ValidateSet('x64', 'arm64')]
     [string[]]$Architectures = @('x64', 'arm64'),
 
@@ -338,7 +342,7 @@ try {
             throw "signtool sign failed for $assetName (exit code $signExitCode)."
         }
 
-        if ($SelfSigned) {
+        if ($SelfSigned -or $SkipSignatureVerification) {
             Write-Host 'Development package: signature block present, Authenticode verification skipped because the certificate is not trusted.'
         }
         else {
