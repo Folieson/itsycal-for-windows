@@ -1,4 +1,4 @@
-# Itsycal for Windows вЂ” extension source
+﻿# Itsycal for Windows РІР‚вЂќ extension source
 
 This folder contains the Windows product: a PowerToys Command Palette extension written in
 C#/.NET 10. It contributes a dock band with the current date and a flyout month calendar
@@ -29,7 +29,7 @@ installation and debugging).
 
 ## Release packages (signed MSIX)
 
-Public releases are signed, self-contained MSIX packages вЂ” the only form Command Palette
+Public releases are signed, self-contained MSIX packages РІР‚вЂќ the only form Command Palette
 discovers. Build them with the release script from the repository root:
 
 ```powershell
@@ -46,11 +46,11 @@ The script builds each architecture (`x64`, `arm64` by default) with
 with `signtool`, verifies trusted signatures, and writes everything to
 `windows/artifacts/release/<version>/`:
 
-- `ItsycalForWindows_<package-version>_<arch>.msix` вЂ” the signed package,
-- `ItsycalForWindows_<package-version>_dev.cer` вЂ” public development certificate
+- `ItsycalForWindows_<package-version>_<arch>.msix` РІР‚вЂќ the signed package,
+- `ItsycalForWindows_<package-version>_dev.cer` РІР‚вЂќ public development certificate
   (self-signed builds only),
-- `SHA256SUMS.txt` вЂ” hashes of every asset,
-- `build-info.json` вЂ” package identity and per-architecture `sha256`/`signatureSha256`
+- `SHA256SUMS.txt` РІР‚вЂќ hashes of every asset,
+- `build-info.json` РІР‚вЂќ package identity and per-architecture `sha256`/`signatureSha256`
   values used to fill in the WinGet manifest.
 
 `-Version` is the marketing version (`1.0.0` maps to the identity version `1.0.0.0`). The
@@ -91,7 +91,7 @@ gh run download <run-id> -n itsycal-for-windows-dev -D .\pkg
 .\windows\scripts\deploy-local.ps1 -MsixPath .\pkg\ItsycalForWindows_*.msix -CertPath .\pkg\devcert.cer
 ```
 
-The development certificate is the repository's persistent development certificate; trust
+Stop **Command Palette** (and its extension process) before installing an upgrade: the running\nhost holds the package files and deployment fails with `0x80073D02`. Once stopped, a newer\nbuild installs over the previous one in place.\n\nThe development certificate is the repository's persistent development certificate; trust
 its `.cer` once (see the root README) and then every CI build installs and upgrades in
 place, because each build carries a higher package revision.
 
@@ -118,17 +118,17 @@ packaged run simply shows no events; the calendar still works.
 
 ## Troubleshooting
 
-- **Band not visible** вЂ” enable it in Command Palette в†’ Dock settings; the host persists the
+- **Band not visible** РІР‚вЂќ enable it in Command Palette РІвЂ вЂ™ Dock settings; the host persists the
   selection per user.
-- **Extension not listed** вЂ” restart Command Palette (or `Reload` в†’ "Reload Command Palette
+- **Extension not listed** РІР‚вЂќ restart Command Palette (or `Reload` РІвЂ вЂ™ "Reload Command Palette
   extensions"). If it is still missing, confirm the MSIX is installed
   (`Get-AppxPackage ItsycalForWindows`) and check the package's app-extension registration in
   `Package.appxmanifest`.
-- **Install fails with a trust or signature error** вЂ” the package was signed with a
+- **Install fails with a trust or signature error** РІР‚вЂќ the package was signed with a
   certificate this machine does not trust. Trust the matching `.cer`
   (`Import-Certificate -FilePath <dev>.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople`
   from an elevated shell), or install a release signed with a trusted certificate.
-- **No events** вЂ” the appointment store is empty, no calendar account is configured, or the
+- **No events** РІР‚вЂќ the appointment store is empty, no calendar account is configured, or the
   extension is running outside its package identity (for example a plain `dotnet run`), in
   which case the `appointmentsSystem` capability is not granted and the calendar shows
   without events.
