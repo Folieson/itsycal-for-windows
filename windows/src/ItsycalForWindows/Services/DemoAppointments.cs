@@ -1,4 +1,4 @@
-#if DEBUG
+﻿#if DEBUG
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -35,6 +35,48 @@ internal static class DemoAppointments
         WriteIndented = true,
     };
 
+    /// <summary>
+    /// Seeds the demo appointments when a marker file asks for it. Verification runs (CI or a
+    /// screenshot pass) create <c>%LOCALAPPDATA%\ItsycalForWindows\demo-auto-seed</c> and restart the
+    /// host instead of driving the Command Palette UI; the marker is removed after seeding.
+    /// </summary>
+    internal static void AutoSeedIfRequested()
+    {
+        try
+        {
+            var marker = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                DataFolderName,
+                "demo-auto-seed");
+            if (!File.Exists(marker))
+            {
+                return;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await CreateAsync();
+                }
+                finally
+                {
+                    try
+                    {
+                        File.Delete(marker);
+                    }
+                    catch
+                    {
+                        // Best effort: a leftover marker only seeds once more.
+                    }
+                }
+            });
+        }
+        catch
+        {
+            // Auto-seeding is diagnostics only and must never break startup.
+        }
+    }
     /// <summary>Full path of the recorded demo event ids.</summary>
     internal static string DataFilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
