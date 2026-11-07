@@ -1,4 +1,4 @@
-﻿# Itsycal for Windows
+# Itsycal for Windows
 
 A calendar for the **Windows PowerToys Command Palette Dock** вЂ” the closest Windows
 equivalent of [ItsyCal](https://github.com/sfsam/itsycal)'s menu-bar calendar.
@@ -60,9 +60,14 @@ open-source) code-signing certificate is in place; the staged WinGet manifests i
 
 ## Screenshots
 
-<!-- Screenshots are added by the maintainer after the end-to-end UI check. -->
+| Command Palette | Calendar flyout |
+|---|---|
+| ![Itsycal for Windows in Command Palette search](docs/screenshots/palette-search.png) | ![Month calendar with today selected and events for the selected day](docs/screenshots/calendar-flyout.png) |
 
-_Placeholder: dock band, month flyout and settings page screenshots land here._
+Captured from the installed 1.0.0 build. The extension follows the Windows display
+language, the first day of week and the week-number setting: the screenshots above show a
+Russian locale, weeks starting on Monday, and the empty state because no calendar account is
+configured on that machine.
 
 ## Build from source
 
