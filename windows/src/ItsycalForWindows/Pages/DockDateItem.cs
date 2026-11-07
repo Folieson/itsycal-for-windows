@@ -12,10 +12,10 @@ namespace ItsycalForWindows.Pages;
 
 /// <summary>
 /// Dock band button: shows the current date and opens the calendar flyout when activated. The
-/// title follows the configurable dock date format; the subtitle carries today's event count
-/// while the event indicator setting is on and an event exists. The text refreshes once a
-/// minute so the Dock stays correct across midnight, and the count is re-read from the shared
-/// event source every few minutes.
+/// title carries the glanceable date in the configured short format; the subtitle is used only
+/// for today's event count while the event indicator setting is on, so the date is never
+/// repeated next to itself. The text refreshes once a minute so the Dock stays correct across
+/// midnight, and the count is re-read from the shared event source every few minutes.
 /// </summary>
 internal sealed partial class DockDateItem : ListItem, IDisposable
 {
@@ -192,11 +192,11 @@ internal sealed partial class DockDateItem : ListItem, IDisposable
         var now = DateTime.Now;
         var culture = CultureInfo.CurrentCulture;
 
-        // The Dock button carries the glanceable date in the configured format; the subtitle
-        // carries today's event count when the indicator is on and there is something to show,
-        // otherwise the full culture-formatted date.
+        // The Dock button keeps the shortest readable form: day number and month abbreviation
+        // come from the configured format. The subtitle is reserved for the event context, so
+        // the full date is not duplicated underneath the formatted title.
         var title = now.ToString(_settings.DockDateFormat, culture);
-        var subtitle = now.ToString("D", culture);
+        var subtitle = string.Empty;
         lock (_sync)
         {
             if (_settings.ShowEventIndicator

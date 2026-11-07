@@ -13,16 +13,22 @@ using Microsoft.CommandPalette.Extensions.Toolkit;
 namespace ItsycalForWindows.Pages;
 
 /// <summary>
-/// Calendar flyout: an Adaptive Card with the month grid (today highlighted, the selected day
-/// emphasized, adjacent-month days dimmed, optional ISO week numbers), month navigation, and the
-/// events of the selected day. The page never blocks: <see cref="GetContent"/> returns the card
-/// immediately and the events load in the background, after which the card is refreshed.
+/// Calendar flyout: a minimalist Adaptive Card with the month grid (today marked by the accent
+/// day number, the selected day by a rounded accent surface, adjacent-month days subtle, optional
+/// ISO week numbers), compact month navigation, and the events of the selected day. The page
+/// never blocks: <see cref="GetContent"/> returns the card immediately and the events load in the
+/// background, after which the card is refreshed.
 /// </summary>
 /// <remarks>
 /// The visible month and the selected date are separate pieces of state. Month navigation moves
 /// the selection to the same day-of-month (clamped to the target month's length) so the events
 /// section keeps referring to an existing day, while selecting a day in an adjacent-month cell
 /// also switches the displayed month.
+/// <para>
+/// The card's hierarchy is expressed with type scale and whitespace rather than rules: one large
+/// month heading, small subtle weekday labels, uniform day numbers, and a single subtle separator
+/// before the events list.
+/// </para>
 /// </remarks>
 internal sealed partial class CalendarPage : ContentPage
 {
@@ -48,11 +54,20 @@ internal sealed partial class CalendarPage : ContentPage
     private const string PreviousMonthLabel = "Previous month";
     private const string TodayLabel = "Today";
     private const string NextMonthLabel = "Next month";
+    private const string PreviousMonthGlyph = "\u2039";
+    private const string NextMonthGlyph = "\u203A";
     private const string AllDayLabel = "All day";
     private const string MultiDayLabel = "Multi-day";
     private const string EventSeparator = " \u00b7 ";
     private const char EventDot = '\u2022';
     private const string SelectedDayContainerStyle = "accent";
+
+    // The card's vertical rhythm. The host maps spacing tokens to 4/8/16/24 px, so the layout
+    // separates the heading, the grid and the events with whitespace instead of rule lines.
+    private const string GridSpacing = "medium";
+    private const string GridRowSpacing = "none";
+    private const string SectionSpacing = "large";
+    private const string RowSpacing = "small";
 
     private readonly object _sync = new();
     private readonly SettingsManager _settings;
@@ -558,12 +573,12 @@ internal sealed partial class CalendarPage : ContentPage
 
         var body = new JsonArray
         {
+            // The month and the year are the card's only large heading; everything below steps
+            // down to small, quiet labels and uniform day numbers.
             (JsonNode)TextBlock(
                 month.Title,
                 size: "large",
                 weight: "bolder",
-                style: "heading",
-                alignment: "center",
                 wrap: true),
             (JsonNode)BuildWeekdayHeader(gridMonth.WeekStart, showWeekNumbers),
         };
@@ -586,16 +601,17 @@ internal sealed partial class CalendarPage : ContentPage
         {
             ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
             ["type"] = "AdaptiveCard",
-            // 1.5 is the version the host itself renders for its own cards; the elements used
-            // here (TextBlock/ColumnSet/Column/selectAction/Action.Submit, container style and
-            // the heading style) are all part of the 1.5 schema.
+            // 1.5 is the version the host renders for its own cards. Everything used here
+            // (TextBlock/ColumnSet/Column with selectAction, container style, spacing, separator,
+            // isSubtle, Action.Submit, tooltip) is documented for 1.5; `roundedCorners` is the
+            // host's documented corner treatment for Container/ColumnSet/Column surfaces.
             ["version"] = "1.5",
             ["body"] = body,
             ["actions"] = new JsonArray
             {
-                (JsonNode)BuildNavigationAction(PreviousMonthLabel, PreviousMonthAction, "nav-previous"),
-                (JsonNode)BuildNavigationAction(TodayLabel, TodayAction, "nav-today"),
-                (JsonNode)BuildNavigationAction(NextMonthLabel, NextMonthAction, "nav-next"),
+                (JsonNode)BuildNavigationAction(PreviousMonthGlyph, PreviousMonthAction, "nav-previous", PreviousMonthLabel),
+                (JsonNode)BuildNavigationAction(TodayLabel, TodayAction, "nav-today", tooltip: null),
+                (JsonNode)BuildNavigationAction(NextMonthGlyph, NextMonthAction, "nav-next", NextMonthLabel),
             },
         };
 
@@ -607,19 +623,21 @@ internal sealed partial class CalendarPage : ContentPage
         var columns = new JsonArray();
         if (showWeekNumbers)
         {
-            columns.Add((JsonNode)BuildColumn("auto", TextBlock(WeekNumberHeader, subtle: true, weight: "bolder", alignment: "center")));
+            columns.Add((JsonNode)BuildColumn("auto", TextBlock(WeekNumberHeader, size: "small", subtle: true, alignment: "center")));
         }
 
+        // Weekday labels are the quietest step of the hierarchy: small, subtle and not bold.
         var shortestDayNames = CultureInfo.CurrentCulture.DateTimeFormat.ShortestDayNames;
         for (var column = 0; column < WeekRow.DayCount; column++)
         {
             var dayOfWeek = (DayOfWeek)(((int)weekStart + column) % WeekRow.DayCount);
-            columns.Add((JsonNode)BuildColumn("stretch", TextBlock(shortestDayNames[(int)dayOfWeek], subtle: true, weight: "bolder", alignment: "center")));
+            columns.Add((JsonNode)BuildColumn("stretch", TextBlock(shortestDayNames[(int)dayOfWeek], size: "small", subtle: true, alignment: "center")));
         }
 
         return new JsonObject
         {
             ["type"] = "ColumnSet",
+            ["spacing"] = GridSpacing,
             ["columns"] = columns,
         };
     }
@@ -631,7 +649,7 @@ internal sealed partial class CalendarPage : ContentPage
         {
             columns.Add((JsonNode)BuildColumn(
                 "auto",
-                TextBlock(week.IsoWeekNumber.ToString(CultureInfo.CurrentCulture), subtle: true, alignment: "center")));
+                TextBlock(week.IsoWeekNumber.ToString(CultureInfo.CurrentCulture), size: "small", subtle: true, alignment: "center")));
         }
 
         foreach (var day in week.Days)
@@ -642,15 +660,18 @@ internal sealed partial class CalendarPage : ContentPage
         return new JsonObject
         {
             ["type"] = "ColumnSet",
+            // Rows sit flush against each other so the grid reads as one block.
+            ["spacing"] = GridRowSpacing,
             ["columns"] = columns,
         };
     }
 
     /// <summary>
-    /// Builds one clickable day cell. The cell background (container style "accent") and the
-    /// accent, bold day number mark the selected day; today keeps the accent number when another
-    /// day is selected. <see cref="JsonObject"/> <c>selectAction</c> makes the whole cell submit
-    /// the day's date, which the page reads back in <see cref="HandleFormSubmit"/>.
+    /// Builds one clickable day cell. Today keeps the accent-coloured, bold day number; the
+    /// selected day adds a rounded accent surface behind its number, so the two states stay
+    /// distinguishable even when today is the selected day. <see cref="JsonObject"/>
+    /// <c>selectAction</c> makes the whole cell submit the day's date, which the page reads back
+    /// in <see cref="HandleFormSubmit"/>.
     /// </summary>
     private static JsonObject BuildDayCell(CalendarDay day, bool isSelected)
     {
@@ -696,7 +717,10 @@ internal sealed partial class CalendarPage : ContentPage
 
         if (isSelected)
         {
+            // The rounded accent surface is the card's only filled surface; `roundedCorners` is
+            // the host's documented corner treatment for Container/ColumnSet/Column elements.
             cell["style"] = SelectedDayContainerStyle;
+            cell["roundedCorners"] = true;
         }
 
         return cell;
@@ -727,22 +751,26 @@ internal sealed partial class CalendarPage : ContentPage
         IReadOnlyList<CalendarEvent> events,
         bool showLoading)
     {
+        // One quiet caption with the single subtle separator of the card; the separator plus the
+        // large spacing is what marks the transition from the grid to the events.
         body.Add((JsonNode)TextBlock(
             FormatEventsHeading(selectedDate),
-            size: "medium",
+            size: "small",
             weight: "bolder",
-            spacing: "medium",
+            subtle: true,
+            spacing: SectionSpacing,
+            separator: true,
             wrap: true));
 
         if (showLoading)
         {
-            body.Add((JsonNode)TextBlock(LoadingEventsLabel, subtle: true, wrap: true));
+            body.Add((JsonNode)TextBlock(LoadingEventsLabel, size: "small", subtle: true, spacing: RowSpacing, wrap: true));
             return;
         }
 
         if (events.Count == 0)
         {
-            body.Add((JsonNode)TextBlock(NoEventsLabel, subtle: true, wrap: true));
+            body.Add((JsonNode)TextBlock(NoEventsLabel, size: "small", subtle: true, spacing: RowSpacing, wrap: true));
             return;
         }
 
@@ -757,7 +785,7 @@ internal sealed partial class CalendarPage : ContentPage
         var heading = string.Concat(
             EventsHeading,
             EventSeparator,
-            selectedDate.ToString("dddd d MMMM", CultureInfo.CurrentCulture));
+            selectedDate.ToString("ddd d MMM", CultureInfo.CurrentCulture));
 
         if (selectedDate == DateOnly.FromDateTime(DateTime.Now))
         {
@@ -768,9 +796,9 @@ internal sealed partial class CalendarPage : ContentPage
     }
 
     /// <summary>
-    /// One event row: a time column and the title/location column. The times describe the slice
-    /// of the event that falls on <paramref name="date"/>, so a multi-day event shows the part
-    /// that belongs to the selected day (for example 22:00–24:00 on its first day).
+    /// One event row: a quiet time column and the title column. The times describe the slice of
+    /// the event that falls on <paramref name="date"/>, so a multi-day event shows the part that
+    /// belongs to the selected day (for example 22:00–24:00 on its first day).
     /// </summary>
     private static JsonObject BuildEventRow(CalendarEvent item, DateOnly date)
     {
@@ -785,16 +813,18 @@ internal sealed partial class CalendarPage : ContentPage
 
         if (!string.IsNullOrEmpty(metaText))
         {
-            details.Add((JsonNode)TextBlock(metaText, subtle: true, size: "small", wrap: true));
+            // Location and multi-day context stay a second, quieter line under the title.
+            details.Add((JsonNode)TextBlock(metaText, size: "small", subtle: true, wrap: true));
         }
 
         return new JsonObject
         {
             ["type"] = "ColumnSet",
-            ["spacing"] = "small",
+            ["spacing"] = RowSpacing,
             ["columns"] = new JsonArray
             {
-                (JsonNode)BuildColumn("auto", TextBlock(timeText, weight: "bolder")),
+                // Auto-width time gutter: secondary color keeps the title as the row's focus.
+                (JsonNode)BuildColumn("auto", TextBlock(timeText, size: "small", subtle: true)),
                 (JsonNode)BuildColumn("stretch", details),
             },
         };
@@ -841,16 +871,31 @@ internal sealed partial class CalendarPage : ContentPage
         return string.Join(EventSeparator, parts);
     }
 
-    private static JsonObject BuildNavigationAction(string title, string action, string id) => new()
+    /// <summary>
+    /// Builds an Action.Submit button. The visible title can be a compact glyph while the tooltip
+    /// carries the full label; the id and the <c>data.nav</c> payload are unchanged from the
+    /// previous layout so the command handling is identical.
+    /// </summary>
+    private static JsonObject BuildNavigationAction(string title, string action, string id, string? tooltip)
     {
-        ["type"] = "Action.Submit",
-        ["id"] = id,
-        ["title"] = title,
-        ["data"] = new JsonObject
+        var button = new JsonObject
         {
-            [NavigationPayloadKey] = action,
-        },
-    };
+            ["type"] = "Action.Submit",
+            ["id"] = id,
+            ["title"] = title,
+            ["data"] = new JsonObject
+            {
+                [NavigationPayloadKey] = action,
+            },
+        };
+
+        if (tooltip is not null)
+        {
+            button["tooltip"] = tooltip;
+        }
+
+        return button;
+    }
 
     private static JsonObject BuildColumn(string width, JsonObject content) =>
         BuildColumn(width, new JsonArray { (JsonNode)content });
@@ -867,10 +912,10 @@ internal sealed partial class CalendarPage : ContentPage
         string? color = null,
         string? weight = null,
         string? size = null,
-        string? style = null,
         string? alignment = null,
         string? spacing = null,
         bool subtle = false,
+        bool separator = false,
         bool wrap = false)
     {
         var block = new JsonObject
@@ -902,11 +947,6 @@ internal sealed partial class CalendarPage : ContentPage
             block["size"] = size;
         }
 
-        if (style is not null)
-        {
-            block["style"] = style;
-        }
-
         if (alignment is not null)
         {
             block["horizontalAlignment"] = alignment;
@@ -915,6 +955,11 @@ internal sealed partial class CalendarPage : ContentPage
         if (spacing is not null)
         {
             block["spacing"] = spacing;
+        }
+
+        if (separator)
+        {
+            block["separator"] = true;
         }
 
         return block;
