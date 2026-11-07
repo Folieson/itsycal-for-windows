@@ -66,7 +66,8 @@ internal sealed partial class CalendarPage : ContentPage
     // separates the heading, the grid and the events with whitespace instead of rule lines.
     private const string GridSpacing = "medium";
     private const string GridRowSpacing = "none";
-    private const string SectionSpacing = "large";
+    private const string SectionSpacing = "medium";
+    private const string SegmentSpacing = "small";
     private const string RowSpacing = "small";
 
     private readonly object _sync = new();
@@ -628,7 +629,7 @@ internal sealed partial class CalendarPage : ContentPage
                     "auto",
                     TextBlock(
                         selectedDate.Day.ToString(culture),
-                        size: "extraLarge",
+                        size: "large",
                         color: "accent",
                         weight: "bolder",
                         alignment: "center")),
@@ -871,27 +872,19 @@ internal sealed partial class CalendarPage : ContentPage
             details.Add((JsonNode)TextBlock(metaText, size: "small", subtle: true, spacing: "none", wrap: true));
         }
 
-        var row = new JsonObject
+        return new JsonObject
         {
             ["type"] = "ColumnSet",
             ["verticalContentAlignment"] = "center",
+            ["spacing"] = SegmentSpacing,
             ["columns"] = new JsonArray
             {
-                // Accent time gutter: the only coloured text in the event card.
+                // Accent time gutter: the only coloured text in the event row.
                 (JsonNode)BuildColumn(
                     "auto",
                     TextBlock(timeText, size: "small", color: "accent", weight: "bolder")),
                 (JsonNode)BuildColumn("stretch", details),
             },
-        };
-
-        return new JsonObject
-        {
-            ["type"] = "Container",
-            ["style"] = "emphasis",
-            ["roundedCorners"] = true,
-            ["spacing"] = RowSpacing,
-            ["items"] = new JsonArray { (JsonNode)row },
         };
     }
 
