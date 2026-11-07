@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using CalendarEvent = global::ItsycalForWindows.Models.CalendarEvent;
 
 namespace ItsycalForWindows.Tests;
 
@@ -34,6 +35,6 @@ internal static class IcsTestData
     public static string WithLfLineEndings(string icsText) => icsText.Replace("\r\n", "\n");
 
     /// <summary>Maps parsed events to their UTC start instants, for compact assertions.</summary>
-    public static string[] UtcStarts(IEnumerable<ItsycalForWindows.Models.CalendarEvent> events) =>
+    public static string[] UtcStarts(IEnumerable<CalendarEvent> events) =>
         events.Select(calendarEvent => calendarEvent.Start.UtcDateTime.ToString("yyyy-MM-ddTHH:mmZ")).ToArray();
 }
