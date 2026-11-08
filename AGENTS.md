@@ -64,6 +64,7 @@ change, and the two roles are separate agents/sessions:
 Record both verdicts (reviewer, date, verdict, link or quoted summary) in the PR under
 "Independent reviews". Every blocking finding is resolved before merge or explicitly deferred
 with the user's agreement. The Lead merges only with both verdicts and green checks.
+
 ## Build and verify
 
 ```powershell
