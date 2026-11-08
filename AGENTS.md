@@ -49,6 +49,21 @@ Behaviour changes start from a spec, not from code:
 4. CI is the gate: build, the full test suite with coverage, the coverage floor and MSIX
    packaging must be green before merge. Quote the CI run in the PR.
 
+## Independent reviews
+
+Behaviour changes pass two independent, read-only reviews. The author never reviews their own
+change, and the two roles are separate agents/sessions:
+
+1. **Spec review** — after the spec is written and before implementation. The
+   `spec-reviewer` role audits acceptance criteria, their test mapping, edge/security/privacy
+   cases and scope; implementation starts only after `approve` or `approve with notes`.
+2. **Code review** — before merge. The `code-reviewer` role checks the diff against the
+   accepted spec, the tests and the CI run/coverage. It must not be the author and must not be
+   the agent that reviewed the spec.
+
+Record both verdicts (reviewer, date, verdict, link or quoted summary) in the PR under
+"Independent reviews". Every blocking finding is resolved before merge or explicitly deferred
+with the user's agreement. The Lead merges only with both verdicts and green checks.
 ## Build and verify
 
 ```powershell

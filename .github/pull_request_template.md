@@ -9,6 +9,12 @@
 - [ ] The new tests failed before the implementation (show the red run locally or in a draft PR).
 - [ ] CI coverage floor passes and coverage did not decrease in the touched files.
 
+## Independent reviews
+
+- Spec review: <!-- reviewer/agent, date, verdict, link -->
+- Code review: <!-- reviewer/agent, date, verdict, link -->
+- [ ] Neither reviewer was the author; spec and code were reviewed by separate agents.
+- [ ] Every blocking finding was resolved or explicitly deferred with the user's agreement.
 ## How verified
 
 <!-- Exact commands and results, not "it builds". -->
