@@ -1,8 +1,8 @@
 # ADR 0003 — Surfaces: hybrid standalone flyout + Command Palette extension
 
 Status: accepted (PO decision 2026-11-08)
-Surface status (2026-11-08): primary = spec 0004 (draft, review pending); optional CmdPal
-surface = spec 0003 (revision 3, re-review pending, explicitly host-limited).
+Surface status (2026-11-08): primary = spec 0004 (revision 3, re-review pending); optional CmdPal
+surface = spec 0003 (revision 4, re-review pending, explicitly host-limited).
 Supersedes: nothing. Amends the surface plan in `docs/ROADMAP.md` and spec 0003.
 
 ## Context

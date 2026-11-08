@@ -12,18 +12,25 @@ the release workflow reads it to build the GitHub release notes.
 - Backlog and the compact calendar UI specs: spec 0003 for the optional Command Palette
   surface and spec 0004 for the primary standalone flyout (`docs/BACKLOG.md`,
   `docs/specs/`).
-- PO decision (ADR 0003): hybrid surfaces — standalone WinUI 3 tray flyout becomes the primary compact UI, CmdPal extension remains optional, custom bottom dock rejected; spec 0004 drafted.
+- PO decision (ADR 0003): hybrid surfaces — standalone WinUI 3 tray flyout becomes the primary compact UI, CmdPal extension remains optional, custom bottom dock rejected; specs 0004 (primary) and 0003 (optional) in independent review.
 - Changelog discipline for releases.
 - Independent design-review gate for UI changes (installed-build screenshots, host-aware
   compactness/typography/states, host acrylic translucency without opaque panels or fake alpha).
 
 ### Changed
 
-- Revised the compact-UI plan after the second independent spec review: spec 0003 now scopes
-  the optional CmdPal surface (split month-budget and no-scroll evidence, committed `.ics`
-  fixture with a stamp-today script, exact `Join meeting`/`Copy link` semantics, neutral event
-  text with accent only for selection/today); spec 0004 remains the primary standalone-flyout
-  spec; backlog/roadmap wording and the `CHG-701` status are aligned.
+- Revised both compact-UI specs after the round-3 independent spec review. Spec 0003 now scopes
+  the optional CmdPal surface honestly: the impossible no-scroll criterion is deleted, the month
+  budget is measured against the visible ContentPage viewport, Copy uses the normalized
+  `AbsoluteUri` through an injectable clipboard helper, and the planned fixture covers
+  all-day/multi-day rows (with MSIX `%LOCALAPPDATA%` virtualisation to verify). Spec 0004 now
+  defines a 448–600 DIP content-hugging client height (480 ±16 DIP collapsed, grow-to-600 then
+  scroll), splits material/positioning/DPI/keyboard/packaging/update criteria, separates the
+  flyout update path from the CmdPal updater, records the merged shared core and the remaining
+  ARCH-802 work, adds empty/loading/error states, and marks the feasibility spike as
+  non-acceptance evidence.
+- Backlog: UI-105 added for optional CmdPal surface polish; ARCH-802 and the UI-101/102 status
+  reflect the merged `ItsycalForWindows.Core` (models + providers) and spec 0004 revision 3.
 
 ## [1.2.2] - 2026-11-08
 

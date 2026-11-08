@@ -32,13 +32,17 @@ Per ADR 0003 the primary compact UI moves to a standalone WinUI 3 tray flyout (~
 acrylic, hotkey): the month is only for quick date navigation; meeting rows show a video glyph
 indicator; the agenda below shows times/locations/inline details with a `Join meeting` button
 in the expanded details. The PowerToys Command Palette extension remains an optional secondary
-surface with its host constraints (it may scroll for long details and cannot match the primary
-compactness). Renderer-supported keyboard (Today/prev/next, Enter on actions) is expected on
-both surfaces; per-element UIA names and arrow-key day focus are deferred on the CmdPal surface
-and are implemented in the primary flyout (spec 0004).
+surface with its host constraints (it may scroll, including for an ordinary day, and cannot
+match the primary compactness). Renderer-supported keyboard (Today/prev/next, Enter on actions)
+is expected on both surfaces; per-element UIA names and arrow-key day focus are deferred on the
+CmdPal surface and are implemented in the primary flyout (spec 0004).
 Plan: [BACKLOG.md](BACKLOG.md). ADR: [0003](adr/0003-surfaces-and-host-strategy.md).
 Spec: [0004-standalone-compact-flyout.md](specs/0004-standalone-compact-flyout.md); optional
 CmdPal surface: [0003-compact-calendar-ui.md](specs/0003-compact-calendar-ui.md).
+Shared core: models and providers are already in `ItsycalForWindows.Core` (PR #39); `UpdateService`
+and settings extraction is the remaining ARCH-802 work. The feasibility spike on
+`feat/flyout-spike` is evidence only — packaging, tray lifecycle and the flyout-specific update
+path are proven by the implementation, not by the spike.
 
 ### v1.3 — "provider platform"
 
