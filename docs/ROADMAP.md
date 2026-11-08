@@ -7,6 +7,11 @@ surface for both, while respecting the Command Palette host constraints (Adaptiv
 theme, host window size) and the privacy promise (no telemetry, calendar data stays on the
 device unless the user configures a provider that requires the network).
 
+**Brand note (2026-11-08):** the product is currently published as Itsycal for Windows. It
+rebrands at v2.0.0 under a new independent name
+([ADR 0004](adr/0004-rebrand-independent-product.md)); the name is TBD and the 1.x line stays
+as a bridge. This roadmap uses the working name until that decision is made.
+
 ## North star
 
 - The fastest way to answer "what is on my calendar today?" from the keyboard.
@@ -71,13 +76,21 @@ path are proven by the implementation, not by the spike.
 - Keyboard-first navigation: an explicit ordered action model for the detail panel and
   settings, and focus restoration after the flyout re-renders.
 
-### v2.0 — "distribute everywhere"
+### v2.0 — "independent brand + trusted/Store distribution"
 
-- Free open-source code-signing certificate (SignPath Foundation / Certum OSS) → trusted
-  MSIX, non-prerelease channel, WinGet submission `Folieson.ItsycalForWindows`.
+- v2.0.0 carries the new independent product name, original icon/branding and a new MSIX
+  Publisher and package family name, with a new WinGet and Store identity
+  ([ADR 0004](adr/0004-rebrand-independent-product.md)). The name is TBD pending brand
+  research and trademark clearance (BRAND-902); candidate names are not committed. 1.x
+  releases remain bridge versions and there is no in-place upgrade: migration is uninstall
+  old and install new.
+- Free open-source code-signing certificate (SignPath Foundation / Certum OSS) under the new
+  identity → trusted MSIX, non-prerelease channel, WinGet submission under the new
+  PackageIdentifier.
 - Auto-update channels: stable and preview; update check respects the selected channel.
 - ARM64 hardware verification and a second machine smoke test.
-- Optional Microsoft Store listing (only if it does not compromise the update path).
+- Optional Microsoft Store listing under the new identity (only if it does not compromise the
+  update path).
 - Publish an "ICS bridge" experiment: a tiny provider app that writes ICS/CalDAV data into
   the Windows appointment store so other Windows apps benefit from the same sources.
 
@@ -98,6 +111,7 @@ path are proven by the implementation, not by the spike.
 | Network/privacy expectations | Network is opt-in per feature/provider, HTTPS only, no telemetry; tokens in DPAPI; documented in the privacy section. |
 | Update pipeline trust | MSIX must verify against SHA256SUMS and be signed by the repository certificate; Windows refuses untrusted packages. |
 | Signing certificate cost/time | Self-signed dev channel continues to work; trusted channel is a funding/procurement task tracked in `docs/SIGNING.md`. |
+| Rebrand at v2.0.0 loses name recognition and cannot upgrade in place | [ADR 0004](adr/0004-rebrand-independent-product.md): 1.x bridge releases, uninstall/reinstall migration docs and repository redirects; the rebrand shares the identity break trusted signing already requires. |
 
 ## Sequenced backlog (next 10 tickets)
 
@@ -110,7 +124,8 @@ path are proven by the implementation, not by the spike.
 7. Microsoft Graph provider (Outlook/M365 and Exchange Online).
 8. CalDAV provider with app-password flows.
 9. Per-source colors/categories in the flyout and dock next-event line.
-10. Trusted signing + WinGet submission + stable update channel.
+10. Trusted signing + WinGet submission + stable update channel, under the v2.0 brand once the
+    name is cleared.
 
 ## Definition of done for every roadmap item
 
