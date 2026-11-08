@@ -111,6 +111,12 @@ builds, packages and tests every PR.
 - Before opening a PR, run `git diff master...HEAD --stat` and confirm it contains only this change. If another PR's commits appear, the branch is stacked: recreate it from `master` and cherry-pick only its own commits (`git rebase --onto master <other-branch> <your-branch>`), then re-verify.
 - Never stack branches.
 
+## Changelog
+
+Every user-visible change adds a line under `[Unreleased]` in `CHANGELOG.md` (Keep a
+Changelog format). A release tag requires a `## [X.Y.Z]` section; the release workflow fails
+without it and uses the section as the GitHub release "What's changed" body.
+
 ## Commits and PRs
 
 Conventional Commits (`feat(windows): ...`, `fix(windows): ...`, `docs: ...`), one logical
