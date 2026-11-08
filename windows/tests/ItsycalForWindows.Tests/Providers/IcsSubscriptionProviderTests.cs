@@ -274,7 +274,7 @@ public sealed class IcsSubscriptionProviderTests
         var ics = IcsTestData.Event("DTSTART:20261110T090000Z", "SUMMARY:Slow");
         var handler = new FakeHttpMessageHandler(async (request, cancellationToken) =>
         {
-            await Task.Delay(60, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(80, cancellationToken).ConfigureAwait(false);
             if (request.RequestUri!.Host == "example.com")
             {
                 var redirect = new HttpResponseMessage(HttpStatusCode.Found);

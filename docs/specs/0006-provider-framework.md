@@ -403,3 +403,9 @@ made by the tests.
   not treated as accepted until the verdict is recorded.
 - Independence: the reviewer must be independent of the author; the same agent must not also
   perform the code review.
+
+- Spec review round 4 (2026-11-08): **approve with notes** — no blocking/major remaining;
+  verdict recorded in PR comment 6725307094; the notes above were applied before merge.
+- Final verdict: **approve with notes** (round 4); code review approve with notes; merge
+  accepted with the documented deferrals (UI wiring PRV-306, encrypted cache PRV-308,
+  OAuth adapters PRV-301/302/303/304, layout PRV-306/307, DNS rebinding PRV-311).

@@ -228,6 +228,7 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider, IProviderCacheI
         // exceed the documented attempt timeout.
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(_options.Timeout);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
         while (true)
         {
@@ -293,6 +294,13 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider, IProviderCacheI
             {
                 return ProviderEventResult.Empty(
                     ProviderStatus.Unavailable("The subscription could not be reached."));
+            }
+
+            // The linked CTS timer can fire late; a monotonic deadline keeps the documented total
+            // budget deterministic across slow redirect hops.
+            if (budget.IsCancellationRequested || stopwatch.Elapsed >= _options.Timeout)
+            {
+                return ProviderEventResult.Empty(ProviderStatus.Unavailable(TimeoutMessage));
             }
 
             using (response)
