@@ -9,6 +9,10 @@ the release workflow reads it to build the GitHub release notes.
 
 ### Added
 
+- Launch and usage UX planning: [spec 0007](docs/specs/0007-launch-and-usage-ux.md) covers cold start
+  and first run, the launch-path matrix, daily use, provider/account setup, the settings surface, the
+  state/error copy matrix and exit/uninstall/v2.0 migration, with UX-101…UX-105 backlog rows. UX only —
+  no behaviour change.
 - PO-approved Calwren mark **Fluent Binding** and its production asset pack under
   `assets/branding/calwren/` (app/Store tiles, tray 16–48, `.ico`, wordmark, lockup, source
   SVGs, proofs). The user-visible rename and package identity change happen at v2.0.0.

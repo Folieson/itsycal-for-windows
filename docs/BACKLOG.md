@@ -90,6 +90,22 @@ per-source status (name, last read, parse errors), and an empty-state call-to-ac
 folder pointer. [Spec 0005](specs/0005-calendar-folder-onboarding.md) lists the same set under
 Out of scope.
 
+## Launch and usage UX (spec 0007)
+
+The end-to-end launch and usage UX (install → first run → every launch path → daily use →
+providers/accounts → settings → errors → quit/uninstall/migration) is specified in
+[spec 0007](specs/0007-launch-and-usage-ux.md). It is **UX only**: no code, packaging or behaviour
+change ships with it; each row needs its own implementation slice (tests first) and the normal review
+gates.
+
+| ID | Priority | Item | Acceptance / outcome | Depends on | Status |
+|---|---|---|---|---|---|
+| UX-101 | P1 | Launch and first run | Tray-only start (hidden at logon, visible for a user launch), one-time welcome with hotkey + Add calendars + start-with-Windows offer, tray overflow/tooltip discovery, single instance, tray-registration and hotkey-conflict fallbacks (spec 0007 AC-1…AC-7). | Spec 0004 AC-6a/6b (package identity, startup task), MSIX-packaged flyout | Planned — spec 0007 in review |
+| UX-102 | P1 | Daily use and keyboard | Open → navigate → read → inline details → Join/Copy/Close → dismiss on every launch path; launch-level keys (`PageUp`/`PageDown`, `Home`, `Ctrl+,`, `Alt+F4` hides), pointer model, UIA/Narrator launch paths, per-show positioning and DPI/theme/reduced-motion behaviour (AC-8…AC-10). | UX-101; spec 0004 AC-2/AC-4 (geometry, keyboard, UIA) | Planned |
+| UX-103 | P1 | Provider and account setup UX | Accounts window flows: provider list, consent before browser, OAuth handoff/wait/cancel/timeout, app-password guidance, account list with status/last sync/re-auth, sign-out/remove, aggregate "needs attention", offline/cache states; local-only path unchanged (AC-11…AC-14). | PRV-306/PRV-307/PRV-308 (account model, secrets, sync); ADR 0005 §5.5 | Planned |
+| UX-104 | P1 | Settings, states and errors | One Settings window (General/Calendars/Accounts/Updates/About) with tray, in-flyout shortcut and CmdPal entry points and documented live-vs-restart behaviour; the state/error copy matrix with one recovery action per row; update available/failed UX (AC-15…AC-17). | UX-101, UX-103; LOC-601/LOC-602 (resources, language) | Planned |
+| UX-105 | P2 | Exit, uninstall and migration | Hide-vs-quit semantics and the single Quit path, tray-unavailable fallback, uninstall retention (calendars kept, tray/startup removed), 1.x→v2.0 Calwren identity migration note and legacy-data reuse offer (AC-18…AC-20). | UX-101; BRAND-901 (v2.0 identity) | Planned |
+
 ## Provider epic — Store gate (ADR 0005)
 
 The provider epic is P0 because the Store listing is blocked until it is done. The full
