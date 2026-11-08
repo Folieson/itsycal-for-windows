@@ -13,6 +13,10 @@ the release workflow reads it to build the GitHub release notes.
   surface and spec 0004 for the primary standalone flyout (`docs/BACKLOG.md`,
   `docs/specs/`).
 - PO decision (ADR 0003): hybrid surfaces — standalone WinUI 3 tray flyout becomes the primary compact UI, CmdPal extension remains optional, custom bottom dock rejected; specs 0004 (primary) and 0003 (optional) in independent review.
+- PO decision (ADR 0004): rebrand the product at v2.0.0 under a new independent name with
+  original branding, a new MSIX Publisher and package family name, and a new WinGet/Store
+  identity; the name is TBD pending research/clearance, 1.x releases remain bridge versions,
+  and the migration is uninstall/reinstall because there is no in-place upgrade.
 - Changelog discipline for releases.
 - Independent design-review gate for UI changes (installed-build screenshots, host-aware
   compactness/typography/states, host acrylic translucency without opaque panels or fake alpha).

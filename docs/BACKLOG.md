@@ -22,6 +22,26 @@ icon on meeting rows.
 **Decision:** UI compaction is the next product epic after v1.2.2 reliability; the PO chose the hybrid surface strategy on 2026-11-08 (ADR 0003): a standalone WinUI 3 tray flyout becomes the primary compact UI, the CmdPal extension remains optional, and a custom bottom dock is rejected. Changelog
 discipline is introduced at the same time (`CHANGELOG.md`, Keep a Changelog).
 
+## PO decision — 2026-11-08: independent product brand at v2.0.0
+
+The user (PO) decided that v2.0.0 ships under an independent product identity: a new product
+name, original branding and icon, a new MSIX `Publisher` and package family name, and a new
+WinGet/Store identity. The product has outgrown its ItsyCal-port framing — a standalone WinUI
+3 tray flyout, an optional Command Palette extension and a shared core with its own acrylic
+UI and roadmap — while the MIT license grants code rights, not the ItsyCal name or brand.
+Trusted signing already forces a one-time Publisher/PFN identity migration, so v2.0.0
+combines it with the rebrand. The full decision is
+[ADR 0004](adr/0004-rebrand-independent-product.md).
+
+The product name is **TBD**: candidate names stay local/private to avoid squatting and are
+chosen in a separate brand-research/clearance decision (BRAND-902). Existing 1.x releases
+remain legacy/bridge versions under the old identity; v2.0.0 is a clean identity with no
+in-place MSIX upgrade, so migration is documented as uninstall 1.x and install 2.0.
+
+**v2.0.0 milestone:** independent brand + trusted/Store distribution — trusted signing, the
+WinGet listing and any Store listing ship under the new name and Publisher, while the 1.x
+line stays a bridge.
+
 ## Now / next / later
 
 | ID | Priority | Item | Outcome / acceptance | Status |
@@ -30,6 +50,8 @@ discipline is introduced at the same time (`CHANGELOG.md`, Keep a Changelog).
 | ARCH-802 | P0 | Extract `ItsycalForWindows.Core` | Calendar models and the appointment/ICS/composite providers are in `ItsycalForWindows.Core` on master (PR #39); both surfaces consume it. `UpdateService` and settings extraction remains, with no duplicated provider/update logic in either surface. | In progress — models + providers merged (#39) |
 | UI-101 | P0 | Compact calendar flyout (standalone primary) | Primary surface is the standalone WinUI 3 flyout (~360 DIP, acrylic, hotkey; ADR 0003): month grid is quick-navigation only, selected-day agenda with inline details below, a video glyph indicator on meeting rows and `Join meeting` in the expanded details. Client height is content-hugging 448–600 DIP with a 480 ±16 DIP collapsed target; the optional CmdPal surface keeps its host constraints and may scroll ([spec 0003](specs/0003-compact-calendar-ui.md)). Spec: [0004](specs/0004-standalone-compact-flyout.md). | Spec 0004 rev 3 re-review pending |
 | UI-102 | P0 | Inline details and meeting actions in agenda | Selecting an event expands its details under the row: full when-line, location, notes, `Join meeting` (only for meeting links), `Copy link` and `Close details`; no-link events show `Close details` only. A video glyph on meeting rows is a non-interactive indicator, not an action; no separate details block after the whole agenda. The optional CmdPal surface may scroll for long details ([spec 0003](specs/0003-compact-calendar-ui.md)); the primary flyout owns the no-scroll typical-day contract ([spec 0004](specs/0004-standalone-compact-flyout.md)). | In spec 0004 rev 3 / optional in 0003 rev 4 |
+| BRAND-901 | P0 | v2.0.0 rebrand and package-identity migration | Ship v2.0.0 under the new product name and original icon/branding; new MSIX `Publisher` and package family name; new WinGet and Store identity; trusted/Store signing under the new identity; README/release migration docs (uninstall 1.x, install 2.0) and a "not affiliated with ItsyCal" credit line; 1.x releases stay bridge versions. Name TBD (BRAND-902). | Planned — blocked on name choice |
+| BRAND-902 | P1 | Product-name research, trademark clearance and identifier reservations | Keep the candidate shortlist local/private (no names committed); knockout search; trademark clearance in the US/EU in Nice classes 9 and 42; check domains, GitHub org, NuGet, WinGet and Store availability; the PO selects the name. | Blocked on PO name choice |
 | UI-103 | P1 | Visual system: light/dark, typography, spacing, accessibility | Optional CmdPal surface: host acrylic translucency visible through the card (no opaque panel fill, no fake alpha); adaptive dark/light; readable contrast over the material; no clipped labels at 800×480 and 640×420; renderer-supported keyboard (Today/prev/next, Enter on actions). Arrow-key day focus and per-element UIA names are host-feature-dependent and deferred there. The primary flyout follows spec 0004 (full keyboard/UIA contract). | Planned |
 | UI-105 | P2 | Optional CmdPal compact-surface polish | Implement [spec 0003](specs/0003-compact-calendar-ui.md) on the optional Command Palette surface after the primary flyout ships: 224-DIP month budget measured against the visible ContentPage viewport, inline details with `Join meeting`/`Copy link`, theme/translucency, scrolling allowed for any day. Host-limited by design; explicitly **not** parity with the primary flyout and not on the critical path. | Spec 0003 rev 4 in review |
 | ONB-101 | P1 | Calendars onboarding | `Itsycal: open calendar folder` command, import `.ics…` file picker, source status (name, last read, parse errors), empty-state CTA. | Planned |
@@ -58,3 +80,7 @@ discipline is introduced at the same time (`CHANGELOG.md`, Keep a Changelog).
   sources will use.
 - Every user-visible change adds a `CHANGELOG.md` line under `[Unreleased]`; a release tag
   requires a matching `## [X.Y.Z]` section.
+- Rebranding is a package-identity change ([ADR 0004](adr/0004-rebrand-independent-product.md)):
+  the 1.x and 2.0 packages have different family names, so there is no in-place MSIX upgrade.
+  Migration docs must instruct uninstall/reinstall, and trusted/Store signing waits for the new
+  Publisher/PFN (BRAND-901/BRAND-902).
