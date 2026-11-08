@@ -21,3 +21,7 @@ packages there and record them here.
 
 - `coverlet.collector` 6.0.4 — MIT License, Copyright (c) 2018 Toni Solarin-Sodara. Collects
   XPlat code coverage for the CI coverage gate (`windows/tests/coverlet.runsettings`).
+
+## System.Security.Cryptography.ProtectedData
+
+MIT; .NET BCL extension used for DPAPI token/password encryption. See https://github.com/dotnet/runtime.
