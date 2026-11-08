@@ -220,6 +220,8 @@ internal sealed class UpdateService
     /// </summary>
     internal const string ApiAssetUrlFormat = "https://api.github.com/repos/{0}/releases/assets/{1}";
 
+    private static readonly CompositeFormat ApiAssetUriFormat = CompositeFormat.Parse(ApiAssetUrlFormat);
+
     /// <summary>GitHub REST endpoint listing the newest releases.</summary>
     internal const string ReleasesUrl = "https://api.github.com/repos/Folieson/itsycal-for-windows/releases?per_page=10";
 
@@ -242,13 +244,31 @@ internal sealed class UpdateService
     private const string ExtensionProcessName = "ItsycalForWindows";
     private const int MaxErrorMessageLength = 200;
 
-    private static readonly HttpClient _httpClient = CreateHttpClient();
-
     private readonly UpdateSettings _settings;
+    private readonly HttpClient _httpClient;
+    private readonly string _dataFolder;
 
     /// <summary>Creates the update service.</summary>
     /// <param name="settings">Update switches the service consults.</param>
-    public UpdateService(UpdateSettings settings) => _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    public UpdateService(UpdateSettings settings)
+        : this(settings, handler: null, dataFolder: null)
+    {
+    }
+
+    /// <summary>
+    /// Test seam: lets tests inject an <see cref="HttpMessageHandler"/> and a temporary data
+    /// folder so the download pipeline (browser URL, API fallback, SHA verification, file paths)
+    /// is exercised without network access or writes to the real user profile.
+    /// </summary>
+    /// <param name="settings">Update switches the service consults.</param>
+    /// <param name="handler">Handler for all HTTP requests; null uses the production client.</param>
+    /// <param name="dataFolder">Root folder for downloads; null uses the real update data folder.</param>
+    internal UpdateService(UpdateSettings settings, HttpMessageHandler? handler, string? dataFolder = null)
+    {
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _httpClient = handler is null ? CreateHttpClient() : new HttpClient(handler, disposeHandler: false);
+        _dataFolder = string.IsNullOrWhiteSpace(dataFolder) ? DataFolder : dataFolder;
+    }
 
     /// <summary>Update switches backing the service.</summary>
     public UpdateSettings Settings => _settings;
@@ -384,7 +404,7 @@ internal sealed class UpdateService
     /// <param name="architecture">Architecture of the package to download.</param>
     /// <param name="cancellationToken">Cancels the downloads.</param>
     /// <returns>The download result; failures are returned, never thrown.</returns>
-    public static async Task<UpdateDownloadResult> DownloadAsync(
+    public async Task<UpdateDownloadResult> DownloadAsync(
         UpdateCheckResult update,
         UpdateArchitecture architecture,
         CancellationToken cancellationToken = default)
@@ -408,7 +428,7 @@ internal sealed class UpdateService
                 return UpdateDownloadResult.Failed($"Release {update.Tag} has no {ChecksumFileName}.", architecture);
             }
 
-            var folder = UpdateFolderPath(update.Tag);
+            var folder = Path.Combine(_dataFolder, UpdatesFolderName, ToSafeFolderName(update.Tag));
             Directory.CreateDirectory(folder);
 
             // Asset names come from the GitHub API; keep only the file name so a crafted
@@ -916,7 +936,7 @@ internal sealed class UpdateService
     /// <param name="assetId">Numeric id from the release JSON.</param>
     internal static Uri BuildApiAssetUri(long assetId) => new(string.Format(
         CultureInfo.InvariantCulture,
-        ApiAssetUrlFormat,
+        ApiAssetUriFormat,
         RepositorySlug,
         assetId));
 
@@ -938,19 +958,44 @@ internal sealed class UpdateService
     internal static bool CanRetryViaApi(long assetId, HttpStatusCode? statusCode) =>
         assetId > 0 && ShouldRetryViaApi(statusCode);
 
-    private static async Task DownloadFileAsync(Uri uri, long assetId, string path, CancellationToken cancellationToken)
+    /// <summary>
+    /// True when a failed browser download should be retried through the API asset endpoint:
+    /// HTTP errors classified by <see cref="ShouldRetryViaApi"/>, request timeouts surfaced as
+    /// <see cref="OperationCanceledException"/> while the caller token is still live, and
+    /// transport failures while reading the response body. A user cancellation is never retried.
+    /// </summary>
+    /// <param name="assetId">Numeric release-asset id; zero disables the fallback.</param>
+    /// <param name="exception">Exception raised by the browser download attempt.</param>
+    /// <param name="cancellationToken">Caller token; a requested cancellation disables the fallback.</param>
+    internal static bool ShouldFallbackToApi(long assetId, Exception exception, CancellationToken cancellationToken)
+    {
+        if (assetId <= 0 || cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        return exception switch
+        {
+            HttpRequestException http => ShouldRetryViaApi(http.StatusCode),
+            OperationCanceledException => true, // HttpClient timeout, not a user cancellation
+            IOException => true, // response stream died mid-download
+            _ => false,
+        };
+    }
+
+    private async Task DownloadFileAsync(Uri uri, long assetId, string path, CancellationToken cancellationToken)
     {
         try
         {
             await DownloadFileFromUriAsync(uri, path, cancellationToken).ConfigureAwait(false);
         }
-        catch (HttpRequestException exception) when (CanRetryViaApi(assetId, exception.StatusCode))
+        catch (Exception exception) when (ShouldFallbackToApi(assetId, exception, cancellationToken))
         {
             await DownloadFileFromApiAsync(assetId, path, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private static async Task DownloadFileFromUriAsync(Uri uri, string path, CancellationToken cancellationToken)
+    private async Task DownloadFileFromUriAsync(Uri uri, string path, CancellationToken cancellationToken)
     {
         using var response = await _httpClient
             .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
@@ -966,7 +1011,7 @@ internal sealed class UpdateService
         await CopyResponseToFileAsync(response, path, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task DownloadFileFromApiAsync(long assetId, string path, CancellationToken cancellationToken)
+    private async Task DownloadFileFromApiAsync(long assetId, string path, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiAssetUri(assetId));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
@@ -984,7 +1029,7 @@ internal sealed class UpdateService
         await CopyResponseToFileAsync(response, path, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task CopyResponseToFileAsync(
+    private async Task CopyResponseToFileAsync(
         HttpResponseMessage response,
         string path,
         CancellationToken cancellationToken)

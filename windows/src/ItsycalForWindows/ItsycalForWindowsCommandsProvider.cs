@@ -147,7 +147,7 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
                     return;
                 }
 
-                var download = await UpdateService
+                var download = await _updateService
                     .DownloadAsync(check, UpdateService.CurrentArchitecture)
                     .ConfigureAwait(false);
                 AppendUpdateLog($"auto-download: success={download.Success}: {download.Message}");
@@ -231,7 +231,7 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
                 return $"{check.Message} Use \"Itsycal: install update\" to install it.";
             }
 
-            var download = await UpdateService
+            var download = await _updateService
                 .DownloadAsync(check, UpdateService.CurrentArchitecture)
                 .ConfigureAwait(false);
             AppendUpdateLog($"manual-download: success={download.Success}: {download.Message}");

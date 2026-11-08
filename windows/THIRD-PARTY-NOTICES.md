@@ -17,3 +17,7 @@ The Windows port reuses material from Microsoft PowerToys:
 
 NuGet dependencies are declared centrally in `windows/Directory.Packages.props`; add new
 packages there and record them here.
+### NuGet packages used by the test harness
+
+- `coverlet.collector` 6.0.4 — MIT License, Copyright (c) Coverlet Contributors. Collects
+  XPlat code coverage for the CI coverage gate (`windows/tests/coverlet.runsettings`).

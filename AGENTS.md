@@ -49,6 +49,22 @@ Behaviour changes start from a spec, not from code:
 4. CI is the gate: build, the full test suite with coverage, the coverage floor and MSIX
    packaging must be green before merge. Quote the CI run in the PR.
 
+## Roles and flow
+
+Behaviour changes follow the team role model:
+
+`product owner` (scope/priority) → `analyst` (spec in `docs/specs/`) → **independent
+spec review** → `developer` (tests first) → **independent tester verification** →
+**independent code review** → `lead` merges.
+
+- The user is the product owner; scope or priority changes need the user's decision, not
+  the agent's.
+- The analyst authors the spec; the spec-reviewer is a different agent. The developer
+  implements only an accepted spec. The tester is read-only and is a different agent from
+  the developer and both reviewers. The code-reviewer checks the diff against the accepted
+  spec and the CI evidence.
+- Bug fixes and docs-only changes may skip the PO/analyst artifacts, but a behaviour
+  change still needs a regression test and the independent code review.
 ## Independent reviews
 
 Behaviour changes pass two independent, read-only reviews. The author never reviews their own
@@ -73,8 +89,7 @@ dotnet test windows/tests/ItsycalForWindows.Tests.csproj -c Debug --collect:"XPl
 ```
 
 CI (`.github/workflows/windows-build.yml`) runs the same test command, enforces a line
-coverage floor from the Cobertura report and uploads the report as an artifact; MSIX
-packaging and signing run after the tests.
+coverage floor from the Cobertura report and uploads the report as an artifact; MSIX packaging runs before the tests and signing runs after them.
 
 Public releases are signed MSIX packages built per architecture by
 `windows/scripts/Build-Release.ps1`. Command Palette discovers extensions only through the

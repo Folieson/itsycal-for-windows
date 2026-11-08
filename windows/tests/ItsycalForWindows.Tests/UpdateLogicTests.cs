@@ -1,7 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using ItsycalForWindows.Services;
 using Xunit;
 
@@ -385,7 +391,10 @@ public sealed class UpdateLogicTests
     [InlineData(429, true)]
     [InlineData(403, true)]
     [InlineData(200, false)]
+    [InlineData(400, false)]
+    [InlineData(401, false)]
     [InlineData(404, false)]
+    [InlineData(408, false)]
     public void ShouldRetryViaApi_MatchesRetryableFailures(int? statusCode, bool expected)
     {
         var status = statusCode is null ? (HttpStatusCode?)null : (HttpStatusCode)statusCode.Value;
@@ -436,6 +445,291 @@ public sealed class UpdateLogicTests
 
         Assert.Equal(42, release.Assets[0].AssetId);
         Assert.Equal(0, release.Assets[1].AssetId);
+    }
+
+    [Fact]
+    public void DownloadAsync_BrowserOnlySendsOneRequestPerAsset()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(request =>
+            request.RequestUri!.AbsolutePath.Contains("SHA256SUMS.txt", StringComparison.Ordinal)
+                ? Ok(SumsBytes(MsixName))
+                : Ok(MsixBytes));
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(2, handler.Requests.Count);
+            Assert.All(handler.Requests, request => Assert.Equal("github.com", request.RequestUri!.Host));
+            Assert.True(File.Exists(result.MsixPath));
+            Assert.Contains("Downloaded and verified", result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void DownloadAsync_FallsBackToApiForChecksumAndMsix()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(request =>
+        {
+            if (request.RequestUri!.Host == "github.com")
+            {
+                return Status(HttpStatusCode.GatewayTimeout);
+            }
+
+            Assert.Equal("api.github.com", request.RequestUri.Host);
+            Assert.Contains(request.Headers.Accept, value => value.MediaType == "application/octet-stream");
+            return request.RequestUri.AbsolutePath.Contains("/assets/7", StringComparison.Ordinal)
+                ? Ok(SumsBytes(MsixName))
+                : Ok(MsixBytes);
+        });
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(4, handler.Requests.Count);
+            Assert.Equal(
+                new[] { "github.com", "api.github.com", "github.com", "api.github.com" },
+                handler.Requests.Select(request => request.RequestUri!.Host));
+            Assert.Contains("SHA256SUMS.txt", handler.Requests[0].RequestUri!.AbsolutePath, StringComparison.Ordinal);
+            Assert.Contains("/assets/7", handler.Requests[1].RequestUri!.AbsolutePath, StringComparison.Ordinal);
+            Assert.True(File.Exists(result.MsixPath));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void DownloadAsync_FailedApiFallbackReturnsFailureWithoutThrowing()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(request =>
+            request.RequestUri!.Host == "github.com"
+                ? Status(HttpStatusCode.GatewayTimeout)
+                : Status(HttpStatusCode.InternalServerError));
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+
+            Assert.False(result.Success);
+            Assert.StartsWith("Download failed", result.Message, StringComparison.Ordinal);
+            Assert.Equal(2, handler.Requests.Count);
+            Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void DownloadAsync_MissingChecksumAssetIdFailsClosed()
+    {
+        var check = CheckWithAssets(sumsId: 0);
+        var (service, folder, handler) = NewService(request => Status(HttpStatusCode.ServiceUnavailable));
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+
+            Assert.False(result.Success);
+            Assert.Equal(1, handler.Requests.Count);
+            Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
+            Assert.Empty(Directory.GetFiles(folder, "*.msix", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void DownloadAsync_TamperedMsixFailsClosed()
+    {
+        var check = CheckWithAssets();
+        var wrongSums = Encoding.UTF8.GetBytes(new string('0', 64) + "  " + MsixName + Environment.NewLine);
+        var (service, folder, handler) = NewService(request =>
+            request.RequestUri!.AbsolutePath.Contains("SHA256SUMS.txt", StringComparison.Ordinal)
+                ? Ok(wrongSums)
+                : Ok(MsixBytes));
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+
+            Assert.False(result.Success);
+            Assert.Contains("SHA256 verification failed", result.Message, StringComparison.Ordinal);
+            Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
+            Assert.Empty(Directory.GetFiles(folder, "*.msix", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void DownloadAsync_TraversalAssetNameStaysInsideUpdatesFolder()
+    {
+        const string hostileName = "..\\..\\evil_x64.msix";
+        var check = CheckWithAssets(msixName: hostileName);
+        var (service, folder, handler) = NewService(request =>
+            request.RequestUri!.AbsolutePath.Contains("SHA256SUMS.txt", StringComparison.Ordinal)
+                ? Ok(SumsBytes(hostileName))
+                : Ok(MsixBytes));
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal("evil_x64.msix", Path.GetFileName(result.MsixPath));
+            Assert.StartsWith(Path.GetFullPath(folder), Path.GetFullPath(result.MsixPath!), StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(folder, "evil_x64.msix")));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void DownloadAsync_TimeoutFallsBackToApi()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(request =>
+        {
+            if (request.RequestUri!.Host == "github.com")
+            {
+                throw new TaskCanceledException("simulated HttpClient timeout");
+            }
+
+            return request.RequestUri.AbsolutePath.Contains("/assets/7", StringComparison.Ordinal)
+                ? Ok(SumsBytes(MsixName))
+                : Ok(MsixBytes);
+        });
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+
+            Assert.True(result.Success, result.Message);
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void DownloadAsync_PreCancelledTokenReturnsFailure()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, _) = NewService(_ => Status(HttpStatusCode.OK));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64, cancellation.Token)
+                .GetAwaiter().GetResult();
+
+            Assert.False(result.Success);
+            Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    private const string MsixName = "ItsycalForWindows_1.2.1.0_x64.msix";
+
+    private static readonly byte[] MsixBytes = Encoding.UTF8.GetBytes("fake-msix-content");
+
+    private static UpdateCheckResult CheckWithAssets(
+        long sumsId = 7,
+        long msixId = 11,
+        string msixName = MsixName)
+    {
+        var sumsUri = new Uri("https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/SHA256SUMS.txt");
+        var msixUri = new Uri("https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/evil_x64.msix");
+        var assets = new ReleaseAsset[]
+        {
+            new("SHA256SUMS.txt", sumsUri, sumsId),
+            new(msixName, msixUri, msixId),
+        };
+        var release = new GitHubRelease(
+            "v1.2.1",
+            Draft: false,
+            Prerelease: true,
+            PublishedAt: null,
+            ReleaseNotes: string.Empty,
+            PageUri: null,
+            Assets: assets);
+        return UpdateCheckResult.Available(Version(1, 2, 0), Version(1, 2, 1), release);
+    }
+
+    private static byte[] SumsBytes(string msixName) =>
+        Encoding.UTF8.GetBytes(
+            Convert.ToHexString(SHA256.HashData(MsixBytes)).ToLowerInvariant()
+            + "  " + Path.GetFileName(msixName) + Environment.NewLine);
+
+    private static HttpResponseMessage Ok(byte[] content) =>
+        new(HttpStatusCode.OK) { Content = new ByteArrayContent(content) };
+
+    private static HttpResponseMessage Status(HttpStatusCode statusCode) => new(statusCode);
+
+    private static (UpdateService Service, string Folder, StubHttpMessageHandler Handler) NewService(
+        Func<HttpRequestMessage, HttpResponseMessage> respond)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "itsycal-update-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var handler = new StubHttpMessageHandler(respond);
+        return (new UpdateService(new UpdateSettings(), handler, folder), folder, handler);
+    }
+
+    private static void DeleteFolder(string folder)
+    {
+        try
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+        catch
+        {
+            // Best effort test cleanup.
+        }
+    }
+
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _respond;
+
+        public StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) => _respond = respond;
+
+        public List<HttpRequestMessage> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Requests.Add(request);
+            return Task.FromResult(_respond(request));
+        }
     }
 
     private static SemanticVersion Version(int major, int minor, int patch) => new(major, minor, patch);
