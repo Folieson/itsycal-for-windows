@@ -8,9 +8,11 @@ theme, host window size) and the privacy promise (no telemetry, calendar data st
 device unless the user configures a provider that requires the network).
 
 **Brand note (2026-11-08):** the product is currently published as Itsycal for Windows. It
-rebrands at v2.0.0 under a new independent name
-([ADR 0004](adr/0004-rebrand-independent-product.md)); the name is TBD and the 1.x line stays
-as a bridge. This roadmap uses the working name until that decision is made.
+rebrands at v2.0.0 under the chosen independent name **Calwren** (Cal + wren;
+[ADR 0004](adr/0004-rebrand-independent-product.md),
+[brand foundation](reference/brand-calwren.md)). The name is chosen; trademark clearance and
+the package/Store identity migration are still pending, and the 1.x line stays as a bridge.
+This roadmap keeps the current product name for shipped features until that migration.
 
 ## North star
 
@@ -76,14 +78,15 @@ path are proven by the implementation, not by the spike.
 - Keyboard-first navigation: an explicit ordered action model for the detail panel and
   settings, and focus restoration after the flyout re-renders.
 
-### v2.0 — "independent brand + trusted/Store distribution"
+### v2.0 — "Calwren brand + trusted/Store distribution"
 
-- v2.0.0 carries the new independent product name, original icon/branding and a new MSIX
+- v2.0.0 carries the **Calwren** brand: the chosen name, original icon/branding and a new MSIX
   Publisher and package family name, with a new WinGet and Store identity
-  ([ADR 0004](adr/0004-rebrand-independent-product.md)). The name is TBD pending brand
-  research and trademark clearance (BRAND-902); candidate names are not committed. 1.x
-  releases remain bridge versions and there is no in-place upgrade: migration is uninstall
-  old and install new.
+  ([ADR 0004](adr/0004-rebrand-independent-product.md),
+  [brand foundation](reference/brand-calwren.md)). Name clearance (US/EU classes 9/42),
+  domains and registry IDs are pending (BRAND-902), and the identity/package migration is not
+  implemented in code yet. 1.x releases remain bridge versions and there is no in-place
+  upgrade: migration is uninstall old and install new.
 - Free open-source code-signing certificate (SignPath Foundation / Certum OSS) under the new
   identity → trusted MSIX, non-prerelease channel, WinGet submission under the new
   PackageIdentifier.
@@ -124,8 +127,8 @@ path are proven by the implementation, not by the spike.
 7. Microsoft Graph provider (Outlook/M365 and Exchange Online).
 8. CalDAV provider with app-password flows.
 9. Per-source colors/categories in the flyout and dock next-event line.
-10. Trusted signing + WinGet submission + stable update channel, under the v2.0 brand once the
-    name is cleared.
+10. Trusted signing + WinGet submission + stable update channel, under the Calwren brand once
+    clearance and identifier reservations complete.
 
 ## Definition of done for every roadmap item
 

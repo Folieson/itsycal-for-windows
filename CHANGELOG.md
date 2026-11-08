@@ -13,10 +13,15 @@ the release workflow reads it to build the GitHub release notes.
   surface and spec 0004 for the primary standalone flyout (`docs/BACKLOG.md`,
   `docs/specs/`).
 - PO decision (ADR 0003): hybrid surfaces — standalone WinUI 3 tray flyout becomes the primary compact UI, CmdPal extension remains optional, custom bottom dock rejected; specs 0004 (primary) and 0003 (optional) in independent review.
-- PO decision (ADR 0004): rebrand the product at v2.0.0 under a new independent name with
-  original branding, a new MSIX Publisher and package family name, and a new WinGet/Store
-  identity; the name is TBD pending research/clearance, 1.x releases remain bridge versions,
-  and the migration is uninstall/reinstall because there is no in-place upgrade.
+- PO decision (ADR 0004): the v2.0.0 name is **Calwren** (Cal + wren), chosen by the PO with a
+  warm, calm, minimalist wren-on-a-calendar-row brand direction, a terracotta/amber accent on
+  neutral, a lowercase `calwren` wordmark and the descriptor `Calwren — calendar for Windows`
+  ([ADR 0004](docs/adr/0004-rebrand-independent-product.md),
+  [brand foundation](docs/reference/brand-calwren.md)). The release also changes the MSIX
+  Publisher/package family name and the WinGet/Store identity. Logo concepts, trademark
+  clearance, domains and package/Store IDs are pending; the public rename ships only at
+  v2.0.0, and 1.x releases remain bridge versions with an uninstall/reinstall migration
+  because there is no in-place upgrade.
 - Changelog discipline for releases.
 - Independent design-review gate for UI changes (installed-build screenshots, host-aware
   compactness/typography/states, host acrylic translucency without opaque panels or fake alpha).
