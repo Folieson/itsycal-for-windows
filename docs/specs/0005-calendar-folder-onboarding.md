@@ -2,7 +2,7 @@
 
 Status: revision 3 — the second independent spec review returned **request changes** on
 documentation and review-record accuracy; the code is unchanged and consistent with the
-accepted scope. This revision resolves B1 and M1–M9 plus the minor notes below and awaits a
+accepted scope. This revision resolves B1, B2 and M1–M9 plus the minor notes below and awaits a
 re-review verdict. The implementation is in this branch but is not accepted until that verdict
 is recorded.
 
@@ -89,7 +89,7 @@ Constraints:
       check (manual step 2) must confirm each part renders on one visual line at the installed
       palette width. If either part wraps, AC-4 **fails**, and the wrap is a finding against
       0003 AC-5 / 0004 AC-7 (their one-line requirement is unmet), recorded against those specs
-      rather than accepted as a rendering note. The two-`TextBlock` structure is unit-tested; the
+      rather than accepted as a rendering note. The two-`TextBlock` structure is inspected in review; the
       one-line rendering is manual.
 - [ ] **AC-5 — no network or telemetry:** the command has no HTTP, telemetry or appointment-store
       dependency, and adds no logging of event content; it only resolves and creates a local folder
@@ -134,11 +134,11 @@ Constraints:
       VERSION:2.0
       PRODID:-//ItsycalForWindows//ONB-101a manual check//EN
       BEGIN:VEVENT
-      UID:onb-101a-packaged-read-20261108@itsycal-for-windows
+      UID:onb101a-onboarding-check-20261108@tester
       DTSTAMP:20261107T000000Z
-      DTSTART:20261108T120000
-      DTEND:20261108T130000
-      SUMMARY:ONB-101a packaged read check
+      DTSTART:20261108T080000
+      DTEND:20261108T083000
+      SUMMARY:ONB-101a onboarding check
       END:VEVENT
       END:VCALENDAR
       ```
@@ -197,8 +197,8 @@ implementation the suite passed: 255 tests total, 0 failed, 0 skipped.
 3. **MSIX `%LOCALAPPDATA%` virtualisation and packaged read (must be verified; AC-7).** Use the
    AC-7 artifact, select 2026-11-08, run the folder command, and in the Explorer window it opens
    create exactly `onboarding-check.ics` from AC-7 (UID
-   `onb-101a-packaged-read-20261108@itsycal-for-windows`, summary `ONB-101a packaged read check`,
-   `DTSTART:20261108T120000`, `DTEND:20261108T130000` local time). Record `openedPath`,
+   `onb101a-onboarding-check-20261108@tester`, summary `ONB-101a onboarding check`,
+   `DTSTART:20261108T080000`, `DTEND:20261108T083000` local time). Record `openedPath`,
    `documentedPath`, `writtenPath` and `readPath` as defined in AC-7. Refresh by restarting
    Command Palette, or by closing and reopening the calendar page more than 30 s after the last
    load (`CalendarPage.EventsRefreshInterval`), and confirm the exact event appears. AC-7 passes
@@ -246,15 +246,21 @@ implementation the suite passed: 255 tests total, 0 failed, 0 skipped.
   `Could not create the calendar folder …\calendars`; no crash or Application Error.
   Explorer-launch failure and missing `%LOCALAPPDATA%` were **not run** (not reproducible on
   this desktop).
-- **AC-7 — PASS:** deterministic `onboarding-check.ics` seeded in the real
-  `%LOCALAPPDATA%\ItsycalForWindows\calendars` was shown after a host restart
-  (`AC7-ics-event.png`, 08:00–08:30). `openedPath` = `documentedPath` = `writtenPath` =
-  `readPath` = `C:\Users\ponam\AppData\Local\ItsycalForWindows\calendars` (case-insensitive,
-  normalized); no `LocalCache` virtualized copy exists, so MSIX `%LOCALAPPDATA%`
-  virtualization does not block the external-write workflow.
-- **Not reproducible:** Explorer-launch failure and missing `%LOCALAPPDATA%` (manual step 6).
-- **Design review:** pending (empty-state screenshots above); the code review is recorded
-  separately in the Review section.
+- **AC-3 — PASS:** the ICS file placed in the folder Explorer/toast named was read by the packaged
+  app; the folder equality is unit-covered and the packaged-read half is AC-7.
+- **AC-5 — PASS (static review):** no network/telemetry/logging calls in the new helpers; only
+  `Directory.CreateDirectory` + `explorer.exe`.
+- **AC-7 — PASS:** the exact AC-7 `onboarding-check.ics` (UID
+  `onb101a-onboarding-check-20261108@tester`, summary `ONB-101a onboarding check`,
+  08:00–08:30) was seeded in the real `%LOCALAPPDATA%\ItsycalForWindows\calendars` and shown
+  after a host restart (`AC7-ics-event.png`, 08:00–08:30). `openedPath` = `documentedPath` =
+  `writtenPath` = `readPath` = `C:\Users\ponam\AppData\Local\ItsycalForWindows\calendars`
+  (case-insensitive, normalized); no `LocalCache` virtualized copy exists, so MSIX
+  `%LOCALAPPDATA%` virtualization does not block the external-write workflow.
+- **Not reproducible:** Explorer-launch failure and missing `%LOCALAPPDATA%` (manual steps 5–6).
+- **Design review:** **approve with notes** (empty state: two exact lines, no wrap at 800×480,
+  contrast ≈12:1; capture coverage light/HC and 640×420 noted as follow-up). The code review is
+  recorded separately in the Review section.
 
 ## Out of scope
 
@@ -309,9 +315,10 @@ lead, and no conflicting changelog file was added by this branch:
      lead. No conflicting changelog file was added.
 - Spec review round 2 (2026-11-08, independent of the author): **request changes** —
   documentation/review-record accuracy; the code was consistent. Findings: **B1** release notes
-  and review item 5 contradicted HEAD (entry present, branch merged not rebased); **M1** context
-  overclaimed that the path was documented only in `windows/README.md` and that the user gets no
-  signal; **M2** `TryGetDefaultPath`'s false branch was implied to be tested; **M3** no backlog row
+  and review item 5 contradicted HEAD (entry present, branch merged not rebased); **B2** AC-7 was
+  not executable as written (no artifact/run, refresh action, or read-path observation); **M1**
+  context overclaimed that the path was documented only in `windows/README.md` and that the user
+  gets no signal; **M2** `TryGetDefaultPath`'s false branch was implied to be tested; **M3** no backlog row
   for ONB-101a; **M4** the 0003/0004 one-line pointer contract was treated as an observation
   rather than a finding; **M5** the behavioral red probe was conflated with the compile red;
   **M6** manual steps 3/4 were not executable (no deterministic VEVENT; the folder is not removed
@@ -325,6 +332,9 @@ lead, and no conflicting changelog file was added by this branch:
     merged master (not rebased); the entry is under `### Added`, without the stray blank line,
     wrapped to 100 columns, and says "separate `TextBlock`". The PR body was corrected in the
     same revision.
+  - **B2:** AC-7 now names the artifact/CI run, install path, exact VEVENT, refresh action, the
+    four paths to record, and a strict pass/fail (the recorded app-visible path must equal the
+    documented pointer path); the tester evidence uses this exact event.
   - **M1:** Context now names the root README and the old label as the places that documented the
     path, and states the real gaps: no in-product action, the combined sentence, and retyping the
     path.
@@ -357,8 +367,9 @@ lead, and no conflicting changelog file was added by this branch:
 - Tester (2026-11-08, independent, installed MSIX from CI run 42487140544): **PASS** on all
   testable ACs; AC-5 by static review; Explorer-launch failure and missing `%LOCALAPPDATA%`
   not run. Evidence is recorded in "Tester evidence" above.
-- Design review: **pending** (empty-state screenshots from the tester; the flyout design gate
-  is separate).
+- Design review (2026-11-08, independent): **approve with notes** — two exact, separate lines,
+  no wrap at 800×480, ≈12:1 contrast, no clipping; minors are optional pointer dimming and
+  light/HC/640×420 capture coverage.
 - Code review (2026-11-08, independent): **approve with notes** on the implementation before
   this docs-only revision — no blocking/major defects; notes on DefaultPath duplication, an
   empty-state test asserting only part of the path, untested toast mapping (review/manual),
@@ -366,5 +377,5 @@ lead, and no conflicting changelog file was added by this branch:
   revision.
 - Verdict: **pending final spec re-review** — a reviewer independent of the author must
   record `approve` / `approve with notes` before merge. This row is not an author approval.
-- Gates (in order): independent tester **PASS**; independent design review **pending**;
+- Gates: independent tester **PASS**; independent design review **approve with notes**;
   independent code review **approve with notes**; final spec re-review **pending**.

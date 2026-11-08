@@ -7,7 +7,7 @@ namespace ItsycalForWindows.Services;
 /// <summary>
 /// The local calendar folder: the one folder <see cref="IcsEventSource"/> reads and the one the
 /// "open calendar folder" command creates and opens. Keeping the path here gives the command, the
-/// empty state and the provider a single source of truth instead of a second copy of the path.
+/// empty state and the provider a same folder as IcsEventSource, enforced by the equality test instead of a second copy of the path.
 /// </summary>
 public static class CalendarFolder
 {
