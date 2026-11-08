@@ -402,18 +402,6 @@ public sealed class UpdateLogicTests
         Assert.Equal(expected, UpdateService.ShouldRetryViaApi(status));
     }
 
-    [Theory]
-    [InlineData(0, 504, false)]
-    [InlineData(42, 504, true)]
-    [InlineData(42, null, true)]
-    [InlineData(42, 404, false)]
-    public void CanRetryViaApi_RequiresAssetIdAndRetryableStatus(int assetId, int? statusCode, bool expected)
-    {
-        var status = statusCode is null ? (HttpStatusCode?)null : (HttpStatusCode)statusCode.Value;
-
-        Assert.Equal(expected, UpdateService.CanRetryViaApi(assetId, status));
-    }
-
     [Fact]
     public void ParseReleases_ReadsAssetIds()
     {
@@ -448,7 +436,7 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
-    public void DownloadAsync_BrowserOnlySendsOneRequestPerAsset()
+    public async Task DownloadAsync_BrowserOnlySendsOneRequestPerAsset()
     {
         var check = CheckWithAssets();
         var (service, folder, handler) = NewService(request =>
@@ -458,7 +446,7 @@ public sealed class UpdateLogicTests
 
         try
         {
-            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
 
             Assert.True(result.Success, result.Message);
             Assert.Equal(2, handler.Requests.Count);
@@ -473,7 +461,7 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
-    public void DownloadAsync_FallsBackToApiForChecksumAndMsix()
+    public async Task DownloadAsync_FallsBackToApiForChecksumAndMsix()
     {
         var check = CheckWithAssets();
         var (service, folder, handler) = NewService(request =>
@@ -492,7 +480,7 @@ public sealed class UpdateLogicTests
 
         try
         {
-            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
 
             Assert.True(result.Success, result.Message);
             Assert.Equal(4, handler.Requests.Count);
@@ -501,6 +489,7 @@ public sealed class UpdateLogicTests
                 handler.Requests.Select(request => request.RequestUri!.Host));
             Assert.Contains("SHA256SUMS.txt", handler.Requests[0].RequestUri!.AbsolutePath, StringComparison.Ordinal);
             Assert.Contains("/assets/7", handler.Requests[1].RequestUri!.AbsolutePath, StringComparison.Ordinal);
+            Assert.Contains("/assets/11", handler.Requests[3].RequestUri!.AbsolutePath, StringComparison.Ordinal);
             Assert.True(File.Exists(result.MsixPath));
         }
         finally
@@ -510,7 +499,7 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
-    public void DownloadAsync_FailedApiFallbackReturnsFailureWithoutThrowing()
+    public async Task DownloadAsync_FailedApiFallbackReturnsFailureWithoutThrowing()
     {
         var check = CheckWithAssets();
         var (service, folder, handler) = NewService(request =>
@@ -520,12 +509,13 @@ public sealed class UpdateLogicTests
 
         try
         {
-            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
 
             Assert.False(result.Success);
             Assert.StartsWith("Download failed", result.Message, StringComparison.Ordinal);
             Assert.Equal(2, handler.Requests.Count);
             Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
+            Assert.Empty(Directory.GetFiles(folder, "SHA256SUMS*", SearchOption.AllDirectories));
         }
         finally
         {
@@ -534,14 +524,14 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
-    public void DownloadAsync_MissingChecksumAssetIdFailsClosed()
+    public async Task DownloadAsync_MissingChecksumAssetIdFailsClosed()
     {
         var check = CheckWithAssets(sumsId: 0);
         var (service, folder, handler) = NewService(request => Status(HttpStatusCode.ServiceUnavailable));
 
         try
         {
-            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
 
             Assert.False(result.Success);
             Assert.Equal(1, handler.Requests.Count);
@@ -555,7 +545,30 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
-    public void DownloadAsync_TamperedMsixFailsClosed()
+    public async Task DownloadAsync_FailedChecksumDownloadLeavesNoPartialFile()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(request =>
+            request.RequestUri!.Host == "github.com"
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new FailingReadContent() }
+                : Status(HttpStatusCode.InternalServerError));
+
+        try
+        {
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
+
+            Assert.False(result.Success);
+            Assert.Equal(2, handler.Requests.Count);
+            Assert.Empty(Directory.GetFiles(folder, "SHA256SUMS*", SearchOption.AllDirectories));
+            Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+    [Fact]
+    public async Task DownloadAsync_TamperedMsixFailsClosed()
     {
         var check = CheckWithAssets();
         var wrongSums = Encoding.UTF8.GetBytes(new string('0', 64) + "  " + MsixName + Environment.NewLine);
@@ -566,7 +579,7 @@ public sealed class UpdateLogicTests
 
         try
         {
-            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
 
             Assert.False(result.Success);
             Assert.Contains("SHA256 verification failed", result.Message, StringComparison.Ordinal);
@@ -580,7 +593,7 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
-    public void DownloadAsync_TraversalAssetNameStaysInsideUpdatesFolder()
+    public async Task DownloadAsync_TraversalAssetNameStaysInsideUpdatesFolder()
     {
         const string hostileName = "..\\..\\evil_x64.msix";
         var check = CheckWithAssets(msixName: hostileName);
@@ -591,7 +604,7 @@ public sealed class UpdateLogicTests
 
         try
         {
-            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
 
             Assert.True(result.Success, result.Message);
             Assert.Equal("evil_x64.msix", Path.GetFileName(result.MsixPath));
@@ -605,7 +618,7 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
-    public void DownloadAsync_TimeoutFallsBackToApi()
+    public async Task DownloadAsync_TimeoutFallsBackToApi()
     {
         var check = CheckWithAssets();
         var (service, folder, handler) = NewService(request =>
@@ -622,7 +635,7 @@ public sealed class UpdateLogicTests
 
         try
         {
-            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
 
             Assert.True(result.Success, result.Message);
         }
@@ -633,7 +646,110 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
-    public void DownloadAsync_PreCancelledTokenReturnsFailure()
+    public async Task DownloadAsync_MidStreamIOExceptionFallsBackToApi()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(request =>
+        {
+            if (request.RequestUri!.Host == "github.com")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new FailingReadContent() };
+            }
+
+            return request.RequestUri.AbsolutePath.Contains("/assets/7", StringComparison.Ordinal)
+                ? Ok(SumsBytes(MsixName))
+                : Ok(MsixBytes);
+        });
+
+        try
+        {
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
+
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(4, handler.Requests.Count);
+            Assert.Equal(
+                new[] { "github.com", "api.github.com", "github.com", "api.github.com" },
+                handler.Requests.Select(request => request.RequestUri!.Host));
+            Assert.Contains(handler.Requests[1].Headers.Accept, value => value.MediaType == "application/octet-stream");
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadAsync_PreCancelledTokenNeverFallsBackToApi()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(_ => Status(HttpStatusCode.OK));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        try
+        {
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64, cancellation.Token);
+
+            Assert.False(result.Success);
+            Assert.DoesNotContain(handler.Requests, request => request.RequestUri!.Host == "api.github.com");
+            Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    private sealed class FailingReadContent : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) =>
+            throw new IOException("simulated mid-stream failure");
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+
+        protected override Task<Stream> CreateContentReadStreamAsync() =>
+            Task.FromResult<Stream>(new FailingReadStream());
+    }
+
+    private sealed class FailingReadStream : Stream
+    {
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new IOException("simulated mid-stream failure");
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<int>(new IOException("simulated mid-stream failure"));
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task DownloadAsync_PreCancelledTokenReturnsFailure()
     {
         var check = CheckWithAssets();
         var (service, folder, _) = NewService(_ => Status(HttpStatusCode.OK));
@@ -642,8 +758,7 @@ public sealed class UpdateLogicTests
 
         try
         {
-            var result = service.DownloadAsync(check, UpdateArchitecture.X64, cancellation.Token)
-                .GetAwaiter().GetResult();
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64, cancellation.Token);
 
             Assert.False(result.Success);
             Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
@@ -664,7 +779,8 @@ public sealed class UpdateLogicTests
         string msixName = MsixName)
     {
         var sumsUri = new Uri("https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/SHA256SUMS.txt");
-        var msixUri = new Uri("https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/evil_x64.msix");
+        var msixFileName = Path.GetFileName(msixName);
+        var msixUri = new Uri($"https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/{msixFileName}");
         var assets = new ReleaseAsset[]
         {
             new("SHA256SUMS.txt", sumsUri, sumsId),

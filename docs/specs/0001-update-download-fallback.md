@@ -1,8 +1,8 @@
 # 0001 — Robust update download via the GitHub API asset endpoint
 
-Status: implementation merged in #27; spec revised after an independent spec review
-(request changes) in #30.
-Related: [ADR 0002](../adr/0002-calendar-providers-and-network.md), PR #27, PR #30.
+Status: implementation merged (landed on master via #27/#31); spec revised after an independent
+spec review (request changes); follow-up fixes in #32.
+Related: [ADR 0002](../adr/0002-calendar-providers-and-network.md), PR #27, #30, #31, #32.
 
 ## Context
 
@@ -25,9 +25,10 @@ fallback is a single attempt per asset and a rate-limit response becomes a norma
 
 - [x] **AC-1**: `BuildApiAssetUri(assetId)` returns
       `https://api.github.com/repos/Folieson/itsycal-for-windows/releases/assets/{assetId}`.
-- [x] **AC-2**: `ShouldRetryViaApi` returns true for transport failures (no status),
-      request timeouts surfaced while the caller token is live, 5xx, 429 and 403; false for
-      2xx, 400/401/404 and 408 (408 is treated as a client error, not retried).
+- [x] **AC-2**: `ShouldRetryViaApi` classifies HTTP statuses: true for 5xx, 429 and 403;
+      false for 2xx, 400/401/404 and 408 (408 is a client error, not retried). The timeout
+      case (live caller token) is classified by `ShouldFallbackToApi`, which also accepts a
+      transport exception with no status.
 - [x] **AC-3**: `ParseReleases` reads the numeric `id` of each asset into
       `ReleaseAsset.AssetId`; an asset without an id keeps `AssetId == 0`.
 - [x] **AC-4**: `DownloadAsync` downloads **both** `SHA256SUMS.txt` and the MSIX browser
@@ -50,6 +51,10 @@ fallback is a single attempt per asset and a rate-limit response becomes a norma
       they are retried through the API fallback (AC-2/AC-4).
 - [x] **AC-9**: An API rate-limit or error response (403/429/5xx) after the fallback attempt
       becomes a normal failed result with a user-presentable message; no storm of retries.
+- [x] **AC-10**: A failed checksum download leaves no partial `SHA256SUMS.txt` or
+      `SHA256SUMS.txt.download` behind. The checksum is written to a temporary file and moved
+      into place only after the download succeeds; an existing checksum file is not truncated
+      in place on failure.
 
 ## Test plan (TDD order)
 
@@ -64,7 +69,9 @@ fallback is a single attempt per asset and a rate-limit response becomes a norma
 | AC-5 | `UpdateLogicTests.DownloadAsync_BrowserOnlySendsOneRequestPerAsset` | unit |
 | AC-6 | `UpdateLogicTests.DownloadAsync_MissingChecksumAssetIdFailsClosed` | unit |
 | AC-7 | `UpdateLogicTests.DownloadAsync_TamperedMsixFailsClosed` + `DownloadAsync_TraversalAssetNameStaysInsideUpdatesFolder` | unit |
-| AC-8 | `UpdateLogicTests.DownloadAsync_PreCancelledTokenReturnsFailure` | unit |
+| AC-8 | `UpdateLogicTests.DownloadAsync_PreCancelledTokenReturnsFailure` + `..._PreCancelledTokenNeverFallsBackToApi` | unit |
+| AC-4 | `UpdateLogicTests.DownloadAsync_MidStreamIOExceptionFallsBackToApi` | unit |
+| AC-10 | `UpdateLogicTests.DownloadAsync_FailedChecksumDownloadLeavesNoPartialFile` | unit |
 | AC-9 | covered by AC-4/AC-2 units; API failure is a normal failed result | unit |
 | - | live fallback on a proxy-blocked network (manual record below) | manual |
 
@@ -104,3 +111,14 @@ Manual verification is a deliberate complement, not a substitute for the unit te
   seam with download-level tests (AC-4/5/6/7/8), timeout and mid-stream transport fallback,
   raw coverage comparison, `coverlet.collector` in THIRD-PARTY-NOTICES, corrected CI ordering
   wording and honest red-run wording. Re-review requested on PR #30.
+## Reconciliation (process deviation)
+
+The implementation in this spec reached `master` accidentally early: branch
+`docs/team-role-model` was created from the unmerged PR #30 branch, so PR #31's squash diff
+contained PR #30's code, tests, workflow and spec changes. PR #30 is closed as superseded; the
+behaviour change is on `master` and was reviewed independently against that tree. Two review
+findings remained after the merge (AC-4 mid-stream `IOException` fallback and AC-8 "no API
+fallback after user cancellation" assertion) and are fixed in PR #32 together with a new
+branching rule: never stack feature branches, always branch from current `master`, and verify
+`git diff master...HEAD --stat` before opening a PR. The independent code-review verdict and
+this deviation are recorded in PR #32 and the harness checkpoint.

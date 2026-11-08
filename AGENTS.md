@@ -42,8 +42,9 @@ Behaviour changes start from a spec, not from code:
 1. Write or update `docs/specs/NNNN-<slug>.md` (template: `docs/specs/TEMPLATE.md`): context,
    acceptance criteria, and the test plan that maps every criterion to a test or a documented
    manual check. Cross-cutting decisions still go in `docs/adr/`.
-2. Write the failing tests for the acceptance criteria first (or in the same change and shown
-   red locally/in a draft PR). A change is not ready while a criterion has no test.
+2. Write the failing tests for the acceptance criteria first. When the local toolchain allows,
+   attach the red run; when it does not (offline restore, CI-only environment), CI is the
+   first run and the PR says why. A change is not ready while a criterion has no test.
 3. Keep pure decision logic in testable helpers; network/UI edges get a structural test or a
    manual verification recorded in the PR/checkpoint.
 4. CI is the gate: build, the full test suite with coverage, the coverage floor and MSIX
@@ -65,6 +66,7 @@ spec review** → `developer` (tests first) → **independent tester verificatio
   spec and the CI evidence.
 - Bug fixes and docs-only changes may skip the PO/analyst artifacts, but a behaviour
   change still needs a regression test and the independent code review.
+
 ## Independent reviews
 
 Behaviour changes pass two independent, read-only reviews. The author never reviews their own
@@ -96,6 +98,12 @@ Public releases are signed MSIX packages built per architecture by
 MSIX app-extension catalog, so there is no unpackaged build — see `windows/README.md` and
 `docs/SIGNING.md`. The release pipeline is `.github/workflows/release.yml` (tag `v*`); CI
 builds, packages and tests every PR.
+
+## Branching
+
+- Start every branch from a freshly fetched `master`: `git switch master && git pull --ff-only && git switch -c <type>/<slug>`. Never branch from another feature branch.
+- Before opening a PR, run `git diff master...HEAD --stat` and confirm it contains only this change. If another PR's commits appear, the branch is stacked: recreate it from `master` and cherry-pick only its own commits (`git rebase --onto master <other-branch> <your-branch>`), then re-verify.
+- Never stack branches.
 
 ## Commits and PRs
 

@@ -23,6 +23,17 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      signing_mode:
+        description: 'Signing mode: auto (trusted cert if configured), trusted, or dev'
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - trusted
+          - dev
 
 permissions:
   contents: write
@@ -55,7 +66,10 @@ jobs:
         shell: pwsh
         env:
           TRUSTED_SIGNING_PFX_BASE64: ${{ secrets.TRUSTED_SIGNING_PFX_BASE64 }}
+          TRUSTED_SIGNING_PFX_PASSWORD: ${{ secrets.TRUSTED_SIGNING_PFX_PASSWORD }}
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
           WINGET_PAT: ${{ secrets.WINGET_PAT }}
+          REQUESTED_SIGNING_MODE: ${{ inputs.signing_mode || 'auto' }}
         run: |
           $ErrorActionPreference = 'Stop'
           $tag = $env:RELEASE_TAG
@@ -68,7 +82,18 @@ jobs:
           # stamps Package.appxmanifest and the project metadata before packaging.
           $packageVersion = "$version.0"
 
-          $buildKind = if ([string]::IsNullOrWhiteSpace($env:TRUSTED_SIGNING_PFX_BASE64)) { 'dev' } else { 'trusted' }
+          $requestedMode = if ([string]::IsNullOrWhiteSpace($env:REQUESTED_SIGNING_MODE)) { 'auto' } else { $env:REQUESTED_SIGNING_MODE }
+          $hasTrustedSecrets = -not [string]::IsNullOrWhiteSpace($env:TRUSTED_SIGNING_PFX_BASE64)
+          $hasTrustedPassword = -not [string]::IsNullOrWhiteSpace($env:TRUSTED_SIGNING_PFX_PASSWORD)
+
+          if ($requestedMode -eq 'trusted' -and -not $hasTrustedSecrets) {
+            throw "signing_mode=trusted was requested, but TRUSTED_SIGNING_PFX_BASE64 is not configured. The dev certificate (SIGNING_PFX_*) cannot produce a trusted release."
+          }
+          if ($hasTrustedSecrets -and -not $hasTrustedPassword) {
+            throw "TRUSTED_SIGNING_PFX_BASE64 is configured without TRUSTED_SIGNING_PFX_PASSWORD; refusing an unverifiable trusted release."
+          }
+
+          $buildKind = if ($requestedMode -eq 'dev') { 'dev' } elseif ($hasTrustedSecrets) { 'trusted' } else { 'dev' }
           $wingetEnabled = if ([string]::IsNullOrWhiteSpace($env:WINGET_PAT)) { 'false' } else { 'true' }
           "VERSION=$version" >> $env:GITHUB_ENV
           "PACKAGE_VERSION=$packageVersion" >> $env:GITHUB_ENV
