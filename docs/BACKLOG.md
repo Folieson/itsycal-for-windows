@@ -60,7 +60,8 @@ line stays a bridge.
 | BRAND-902 | P1 | Calwren name research, trademark clearance and identifier reservations | Name research is **done**: Calwren selected by the PO (2026-11-08). Remaining: trademark clearance in the US/EU in Nice classes 9 and 42; availability and reservation of domains (`calwren.com`, `calwren.app`, `calwren.dev`), the GitHub organization, npm/NuGet package IDs, WinGet and the Store. Keep candidate names and artwork private until cleared. | Name research done; clearance + reservations pending |
 | UI-103 | P1 | Visual system: light/dark, typography, spacing, accessibility | Optional CmdPal surface: host acrylic translucency visible through the card (no opaque panel fill, no fake alpha); adaptive dark/light; readable contrast over the material; no clipped labels at 800×480 and 640×420; renderer-supported keyboard (Today/prev/next, Enter on actions). Arrow-key day focus and per-element UIA names are host-feature-dependent and deferred there. The primary flyout follows spec 0004 (full keyboard/UIA contract). | Planned |
 | UI-105 | P2 | Optional CmdPal compact-surface polish | Implement [spec 0003](specs/0003-compact-calendar-ui.md) on the optional Command Palette surface after the primary flyout ships: 224-DIP month budget measured against the visible ContentPage viewport, inline details with `Join meeting`/`Copy link`, theme/translucency, scrolling allowed for any day. Host-limited by design; explicitly **not** parity with the primary flyout and not on the critical path. | Spec 0003 rev 4 in review |
-| ONB-101 | P1 | Calendars onboarding | `Itsycal: open calendar folder` command, import `.ics…` file picker, source status (name, last read, parse errors), empty-state CTA. | Planned |
+| ONB-101 | P1 | Calendars onboarding | Import `.ics…` file picker, per-source status (name, last read, parse errors), empty-state CTA beyond the folder pointer. The folder command is sliced out as ONB-101a. | Planned — ONB-101a in review (PR #42); rest deferred |
+| ONB-101a | P1 | Open calendar folder command (slice of ONB-101) | `Itsycal: open calendar folder` creates and opens `%LOCALAPPDATA%\ItsycalForWindows\calendars` from the palette and the calendar item's context menu; the selected-day empty state shows the 0003/0004 pointer as a separate `TextBlock`. Spec [0005](specs/0005-calendar-folder-onboarding.md). | In review — PR #42, spec re-review pending |
 | REL-201 | P1 | ICS recurrence correctness | DST wall-clock expansion and BYDAY; fail-closed for unsupported RRULE parts. Spec [0002](https://github.com/Folieson/itsycal-for-windows/blob/c92c31d/docs/specs/0002-reliability-hardening.md) (reliability hardening; narrowed after two independent reviews; pinned to the latest reviewed commit on `spec/v1.2.2-reliability` until it merges). | Spec review in progress |
 | REL-202 | P2 | Remaining reliability findings | Version/updater minors (TOCTOU, log encoding), release/CI gates (tests on release tags, ARM64, `winget validate`, branch protection), docs accuracy. | Planned |
 | SET-401 | P2 | Settings consolidation | One Settings page: Calendar / Dock / Calendars / Updates; human labels, dock-format preview, update status. | Planned |
@@ -69,6 +70,11 @@ line stays a bridge.
 | LOC-601 | P3 | Localization (en-US/ru-RU) | `.resw` strings, culture date/time formats; README updated. | Deferred |
 | UI-104 | Done | Independent design-review gate | Read-only design reviewer judges installed-build screenshots against the accepted UI spec/reference after the tester and before code review; independence from author/tester/reviewers; verdict + screenshots recorded in the PR. | Added |
 | CHG-701 | Done | Changelog discipline | `CHANGELOG.md` with sections for every release; contributors update `[Unreleased]`; the release workflow extracts the tagged `## [X.Y.Z]` section into the GitHub release notes and fails when it is missing. | Done — `release.yml` section extraction verified |
+
+Deferred ONB-101 items after ONB-101a (PR #42): `.ics` import file picker / drag-and-drop,
+per-source status (name, last read, parse errors), and an empty-state call-to-action beyond the
+folder pointer. [Spec 0005](specs/0005-calendar-folder-onboarding.md) lists the same set under
+Out of scope.
 
 ## Dependencies and constraints
 
