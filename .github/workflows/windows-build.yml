@@ -68,8 +68,45 @@ jobs:
           -p:AppxPackageSigningEnabled=false
           -p:AppxPackageDir="${{ github.workspace }}\windows\artifacts\msix\"
 
-      - name: Run unit tests
-        run: dotnet test windows/tests/ItsycalForWindows.Tests/ItsycalForWindows.Tests.csproj -c Debug
+      - name: Run unit tests with coverage
+        run: >
+          dotnet test windows/tests/ItsycalForWindows.Tests/ItsycalForWindows.Tests.csproj -c Debug
+          --collect:"XPlat Code Coverage"
+          --results-directory windows/artifacts/coverage
+          --settings windows/tests/coverlet.runsettings
+
+      - name: Enforce the coverage floor
+        shell: pwsh
+        run: |
+          $coverage = Get-ChildItem 'windows/artifacts/coverage' -Recurse -Filter 'coverage.cobertura.xml' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $coverage) {
+            Write-Error 'No coverage.cobertura.xml was produced by the test run.'
+            exit 1
+          }
+
+          [xml]$document = Get-Content -LiteralPath $coverage.FullName -Raw
+          $lineRate = [double]::Parse($document.coverage.'line-rate', [System.Globalization.CultureInfo]::InvariantCulture)
+          $percent = [math]::Round($lineRate * 100, 1)
+          $floor = 35.0
+
+          "### Code coverage" >> $env:GITHUB_STEP_SUMMARY
+          "Line coverage: **$percent%** (floor: $floor%)" >> $env:GITHUB_STEP_SUMMARY
+          "Report: $($coverage.FullName)" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "Line coverage: $percent% (floor: $floor%)"
+
+          if ($percent -lt $floor) {
+            Write-Error "Line coverage $percent% is below the $floor% floor. Add tests or adjust the floor with a documented reason."
+            exit 1
+          }
+
+      - name: Upload the coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: itsycal-coverage
+          path: windows/artifacts/coverage/**/coverage.cobertura.xml
+          if-no-files-found: warn
 
       - name: Locate the MSIX package
         shell: pwsh
