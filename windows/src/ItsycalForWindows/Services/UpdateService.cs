@@ -242,13 +242,31 @@ internal sealed class UpdateService
     private const string ExtensionProcessName = "ItsycalForWindows";
     private const int MaxErrorMessageLength = 200;
 
-    private static readonly HttpClient _httpClient = CreateHttpClient();
-
     private readonly UpdateSettings _settings;
+    private readonly HttpClient _httpClient;
+    private readonly string _dataFolder;
 
     /// <summary>Creates the update service.</summary>
     /// <param name="settings">Update switches the service consults.</param>
-    public UpdateService(UpdateSettings settings) => _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    public UpdateService(UpdateSettings settings)
+        : this(settings, handler: null, dataFolder: null)
+    {
+    }
+
+    /// <summary>
+    /// Test seam: lets tests inject an <see cref="HttpMessageHandler"/> and a temporary data
+    /// folder so the download pipeline (browser URL, API fallback, SHA verification, file paths)
+    /// is exercised without network access or writes to the real user profile.
+    /// </summary>
+    /// <param name="settings">Update switches the service consults.</param>
+    /// <param name="handler">Handler for all HTTP requests; null uses the production client.</param>
+    /// <param name="dataFolder">Root folder for downloads; null uses the real update data folder.</param>
+    internal UpdateService(UpdateSettings settings, HttpMessageHandler? handler, string? dataFolder = null)
+    {
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _httpClient = handler is null ? CreateHttpClient() : new HttpClient(handler, disposeHandler: false);
+        _dataFolder = string.IsNullOrWhiteSpace(dataFolder) ? DataFolder : dataFolder;
+    }
 
     /// <summary>Update switches backing the service.</summary>
     public UpdateSettings Settings => _settings;
@@ -384,7 +402,7 @@ internal sealed class UpdateService
     /// <param name="architecture">Architecture of the package to download.</param>
     /// <param name="cancellationToken">Cancels the downloads.</param>
     /// <returns>The download result; failures are returned, never thrown.</returns>
-    public static async Task<UpdateDownloadResult> DownloadAsync(
+    public async Task<UpdateDownloadResult> DownloadAsync(
         UpdateCheckResult update,
         UpdateArchitecture architecture,
         CancellationToken cancellationToken = default)
@@ -408,7 +426,7 @@ internal sealed class UpdateService
                 return UpdateDownloadResult.Failed($"Release {update.Tag} has no {ChecksumFileName}.", architecture);
             }
 
-            var folder = UpdateFolderPath(update.Tag);
+            var folder = Path.Combine(_dataFolder, UpdatesFolderName, ToSafeFolderName(update.Tag));
             Directory.CreateDirectory(folder);
 
             // Asset names come from the GitHub API; keep only the file name so a crafted
@@ -938,7 +956,7 @@ internal sealed class UpdateService
     internal static bool CanRetryViaApi(long assetId, HttpStatusCode? statusCode) =>
         assetId > 0 && ShouldRetryViaApi(statusCode);
 
-    private static async Task DownloadFileAsync(Uri uri, long assetId, string path, CancellationToken cancellationToken)
+    private async Task DownloadFileAsync(Uri uri, long assetId, string path, CancellationToken cancellationToken)
     {
         try
         {
@@ -950,7 +968,7 @@ internal sealed class UpdateService
         }
     }
 
-    private static async Task DownloadFileFromUriAsync(Uri uri, string path, CancellationToken cancellationToken)
+    private async Task DownloadFileFromUriAsync(Uri uri, string path, CancellationToken cancellationToken)
     {
         using var response = await _httpClient
             .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
@@ -966,7 +984,7 @@ internal sealed class UpdateService
         await CopyResponseToFileAsync(response, path, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task DownloadFileFromApiAsync(long assetId, string path, CancellationToken cancellationToken)
+    private async Task DownloadFileFromApiAsync(long assetId, string path, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiAssetUri(assetId));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
@@ -984,7 +1002,7 @@ internal sealed class UpdateService
         await CopyResponseToFileAsync(response, path, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async Task CopyResponseToFileAsync(
+    private async Task CopyResponseToFileAsync(
         HttpResponseMessage response,
         string path,
         CancellationToken cancellationToken)
