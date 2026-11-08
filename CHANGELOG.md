@@ -9,6 +9,9 @@ the release workflow reads it to build the GitHub release notes.
 
 ### Added
 
+- PO-approved Calwren mark **Fluent Binding** and its production asset pack under
+  `assets/branding/calwren/` (app/Store tiles, tray 16–48, `.ico`, wordmark, lockup, source
+  SVGs, proofs). The user-visible rename and package identity change happen at v2.0.0.
 - ONB-101a: `Itsycal: open calendar folder` creates and opens the local calendars
   folder from Command Palette; the empty day shows the folder pointer as a separate
   `TextBlock`.

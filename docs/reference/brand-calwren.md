@@ -57,19 +57,23 @@ and the contrast, not the exact hex.
 
 ## Logo
 
-Concept: a **wren perched on a calendar row**. The bird's body and the row/cell share a
-semantic calendar overlap: the belly or wing negative space is a date cell, and the perch is
-the row line, so the mark reads as bird and calendar in one gesture. It is not a bird added
-next to a calendar grid.
+Final mark (PO-approved 2026-11-08): **Fluent Binding**. A warm wren perches on the ink
+binding bar of a paper calendar page. The page carries a 7-column / 2-row grid and one
+terracotta, rounded **date cell** directly under the bird's feet, so the calendar read is
+structural: page edge → binding → week grid → the day. Fluent 2 cues: rounded surfaces,
+layered shadow, one accent fill, no gradient or gloss.
 
-- Silhouette first: one solid ink-or-terracotta shape, no gradient, no mascot face, no eye
-  needed at small sizes.
-- Must read at **16 px** (tray/favicon) and stay clear at 256 px; test the 16 px version in
-  light and dark, on a busy taskbar.
-- The tray variant is monochrome and theme-aware; the package icon may use terracotta/amber.
+- The page is the calendar: do not separate the bird from the page or turn the mark into a
+  bird beside a grid.
+- Must read at **16 px** (tray/favicon) and stay clear at 256 px; the 16 px master is
+  pixel-snapped (holes/shadow flatten, page/grid/date remain).
+- The app tile is paper at every size; the tray variant is the same mark on a transparent
+  background. The package icon uses terracotta/paper.
 - Clear space: at least the height of the wren's head on all sides; no text inside the mark.
-- The mark and the lowercase `calwren` wordmark can lock up horizontally; the descriptor stays
+- The mark and the lowercase `calwren` wordmark lock up horizontally; the descriptor stays
   separate and is never part of the app icon.
+- Production assets: [`assets/branding/calwren/`](../../assets/branding/calwren/) (SVG masters,
+  app/Store tiles, tray 16–48, `.ico`, wordmark/lockup, final sheet, provenance).
 
 ## Do / don't
 
@@ -87,15 +91,16 @@ Don't:
 - Use Microsoft/Fluent material-brand stems, Segoe UI brand lockups, Windows logos or Microsoft
   product colours as brand elements. Using Fluent controls inside the app is fine.
 - Use a corporate abstract mark (swoosh, orbit, chat bubble, generic leaf/feather).
-- Commit candidate concepts or image files to this repository.
+- Commit candidate concepts; approved production assets live only under
+  `assets/branding/calwren/`.
 
 ## Asset checklist (v2.0.0)
 
-- [ ] Primary mark: SVG master plus monochrome SVG, approved by the PO.
-- [ ] App icon: `.ico` with 16/20/24/32/40/48/64/128/256 px; final 16 px tray read checked.
+- [x] Primary mark: SVG master plus monochrome SVG, approved by the PO.
+- [x] App icon: `.ico` with 16/20/24/32/40/48/64/128/256 px; final 16 px tray read checked.
 - [ ] MSIX package assets: Square44x44, Square150x150, Wide310x150, StoreLogo, SplashScreen
       (scale-100 through scale-400); tray icon light/dark.
-- [ ] Lowercase `calwren` wordmark: SVG and PNG for README/Store; horizontal lockup.
+- [x] Lowercase `calwren` wordmark: SVG and PNG for README/Store; horizontal lockup.
 - [ ] Descriptor "Calwren — calendar for Windows" on Store listing, README and About.
 - [ ] README header, Store screenshots and social preview using the approved palette.
 - [ ] No image file in this repository until the PO approves the final set; candidate concepts
