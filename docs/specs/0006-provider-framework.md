@@ -3,10 +3,10 @@
 Status: proposed — revision 2 (2026-11-08). Revision 1 was reviewed independently and
 received "request changes" for the secret-at-rest design, the missing secret-delivery path,
 the transport policy and spec/ADR reconciliation. Revision 2 fixes those blocking findings
-and the majors; CI is green (run 42506197925, head `4cd4f18`: 414/414 tests, 52.7% total
-coverage, Providers 87.70%/84.12%, ARM64 step 0/0). A second independent spec review still
-requires the ADR/backlog/evidence reconciliation recorded below; no approval is claimed until
-that re-review completes.
+and the majors; CI is green (run 42507363384, head `06fb047`: 414/414 tests, 52.7% total
+coverage, Providers 87.70%/84.12%, ARM64 step 0/0). The ADR/backlog/evidence reconciliation is
+recorded below; a final independent spec re-review is pending and no approval is claimed
+until it completes.
 Backlog: [PRV-300](../BACKLOG.md) (provider epic: registry, shared contracts and
 project skeleton), with slices of PRV-305 (ICS subscriptions), PRV-307 (secret storage) and
 PRV-308 (sync/cache). This is the first slice only; OAuth/Graph/CalDAV transports and the
@@ -150,9 +150,9 @@ flyout/CmdPal UI wiring and composition, localization, telemetry, and Store dist
 - Local file mode accepts only an absolute rooted `.ics` path or a `file:` URI with an
   empty/`localhost` host; relative paths are rejected.
 
-### Encrypted disk cache (PO direction, not implemented here)
+### Encrypted disk cache (PO decision, not implemented in this slice)
 
-The PO direction for the next provider slice is an **encrypted on-disk event cache** so a
+The PO decision for the next provider slice is an **encrypted on-disk event cache** so a
 calendar survives a restart while offline. This slice deliberately keeps only the
 in-memory `IProviderCache` as a placeholder and writes no event content to disk. Delivering
 the encrypted cache requires its own privacy/threat-model update (ADR 0005 Q7: key
@@ -200,7 +200,7 @@ dotnet build windows/src/ItsycalForWindows.Providers/ItsycalForWindows.Providers
 ```
 
 The ARM64 CI step (restore + build of the Providers project) **executed successfully** in the
-green CI run 42506197925 on head `4cd4f18` (0 warnings/0 errors); the local command above is
+green CI run 42507363384 on head `06fb047` (0 warnings/0 errors); the local command above is
 retained for reproducibility. No separate ARM64 test job exists yet.
 
 ## Acceptance criteria
@@ -265,8 +265,11 @@ retained for reproducibility. No separate ARM64 test job exists yet.
   material is in the DPAPI store. The ICS provider only accepts HTTPS (or the explicit
   local-file mode), rejects URL credentials, caps redirects/time/size, applies the
   private/link-local policy, and treats the user-supplied feed address as a secret trust
-  boundary. Event content is never written to disk and never sent anywhere except to the
-  configured provider.
+  boundary. In this framework slice event content is never written to disk; the accepted
+  encrypted on-disk cache (ADR 0005 Q7, PRV-308) will store only encrypted records, never
+  plaintext. In this framework slice no event content is written to disk; the
+  accepted encrypted on-disk cache (ADR 0005 Q7, PRV-308) will store only encrypted records
+  and never plaintext.
 - [x] **AC-10 — integration:** a thin `IEventSource` adapter (`ProviderEventSource`) maps
   provider refresh results to Core `CalendarEvent`s with an offline test. UI/surface wiring
   is explicitly deferred and documented above; the app no longer carries an unused provider
@@ -275,10 +278,11 @@ retained for reproducibility. No separate ARM64 test job exists yet.
   and all new behavior is covered by offline unit tests; `windows/tests/coverlet.runsettings`
   includes `[ItsycalForWindows.Providers]*`; the coverage floor stays at 30%; the Windows CI
   job builds the provider library for ARM64. This spec maps each AC to tests and records that
-  revision 2 is **CI-green** (run 42506197925, head `4cd4f18`: 414/414 tests, total line
+  revision 2 is **CI-green** (run 42507363384, head `06fb047`: 414/414 tests, total line
   coverage 52.7%, Providers 87.70% line/84.12% branch, ARM64 step 0/0) and that an independent
   spec re-review is pending (revision 1 was request-changes; the previous blockers are
-  resolved in the code). The earlier local 53.82%/88.08% numbers are superseded by CI.
+  resolved in the code). The earlier local 53.82%/88.08% numbers are historical; CI is
+  canonical.
 
 ## Test plan
 
@@ -327,12 +331,13 @@ dotnet exec <xunit-console-2.9.3>/xunit.console.dll `
 # Coverage over the same run with coverlet.console 6.0.4 (Cobertura), the same filters as
 # windows/tests/coverlet.runsettings
 # -> ItsycalForWindows.Providers: 88.08% line / 84.15% branch; total line coverage: 53.82%
-#    (floor 30%; the pre-slice value was 37.5% because Providers was not counted)
+#    (historical local run; CI is canonical: 52.7% total / Providers 87.70%/84.12%)
 ```
 
-CI has not been run for this revision (branch not pushed); the ARM64 step and the
-`dotnet test` path are the gates to confirm there. No live provider, DNS, or network
-request is made by the tests.
+CI is green for this revision (run 42507363384, head `06fb047`: 414/414 tests, line
+coverage 52.7%, Providers 87.70%/84.12%, ARM64 step 0/0); the `dotnet test` job, coverage
+floor and ARM64 restore/build are the gates. No live provider, DNS, or network request is
+made by the tests.
 
 ## Privacy and security
 
@@ -370,7 +375,7 @@ request is made by the tests.
 
 | Item | Why deferred | Tracked as |
 |---|---|---|
-| Encrypted on-disk event cache (PO decision 2026-11-08) | Needs its own privacy/threat-model update, key management, retention/delete design; ADR 0005 Q7 now records the PO decision | PRV-308 + ADR 0005 Q7 update |
+| Encrypted on-disk event cache (PO decision 2026-11-08) | Needs its own privacy/threat-model update, key management, retention/delete design; ADR 0005 Q7 records the decision | PRV-308 |
 | UI wiring: `ProviderEventSource` in the flyout/CmdPal composite, add-account/settings surface | No UI in this slice; surfaces do not reference the provider library yet | PRV-306 + PRV-308 |
 | OAuth adapters (Google/Graph), CalDAV/Yandex transports, Credential Locker token storage | Separate transports and review scope | PRV-301/302/303/304/307 |
 | Background scheduling, backoff/jitter, `429 Retry-After` | Not required for the framework slice | PRV-308 |
@@ -380,14 +385,18 @@ request is made by the tests.
 
 - Spec review round 1 (`187985d`): request changes — B1 tokenized URL at rest, B2 spec/ADR
   reconciliation, B3 missing secret delivery; majors on transport/cache/store/tests.
-- Revision 2 fixes B1–B3 and the code majors; CI run 42506197925 is green. Spec review
-  round 2 returned request changes only for the remaining ADR/backlog/evidence
-  reconciliation (ADR 0005 still said implementation not started; deferral pointers).
-  Those documents are now reconciled (ADR 0005 implementation amendment/Q7, BACKLOG
-  PRV-306/307/308, this spec's evidence); a final independent spec re-review is pending.
-- Code review of revision 2 is pending; no approval is claimed by the author.
-- Reviewer must be independent of the author; the same agent must not also perform the code
-  review.
-- Code reviewer: **pending** for the revision-2 head; independent of the author and of the
-  spec reviewer.
-- CI: **pending** for this revision (not pushed from the fix work).
+- Revision 2 fixes B1–B3 and the code majors; CI run 42506197925 (code head `4cd4f18`) and
+  run 42507363384 (docs head `06fb047`) are green.
+- Spec review round 2: request changes for remaining ADR/backlog/evidence reconciliation
+  (ADR 0005 implementation status, deferral ownership, stale CI evidence) plus the ADR Q7
+  encrypted-cache propagation. Those are fixed in this revision: ADR 0005 records the
+  implementation amendment, Q7 encrypted cache and the affected sections/Store-gate
+  criterion; BACKLOG PRV-306/307/308 own the storage-layout/secret/encrypted-cache work;
+  the evidence now points at run 42507363384/head `06fb047`.
+- Code review of revision 2: **approve with notes** (no blocking code findings; major
+  follow-ups on secret fingerprinting, corrupt-secret removal, in-flight invalidation and
+  custom-handler redirects are deferred to PRV-301/304/306/307/308; PR comment posted).
+- Final independent spec re-review: **pending** — no approval claimed; implementation is
+  not treated as accepted until the verdict is recorded.
+- Independence: the reviewer must be independent of the author; the same agent must not also
+  perform the code review.

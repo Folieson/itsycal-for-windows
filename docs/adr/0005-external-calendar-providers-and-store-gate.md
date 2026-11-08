@@ -9,7 +9,7 @@
   account metadata in `%LOCALAPPDATA%\ItsycalForWindows\accounts\accounts.json` and
   per-account DPAPI secrets in `secrets.dat` (ProtectedData `CurrentUser`, per-account
   entropy, quarantine/cross-process lock), not the `settings.json`/`providers\` layout or
-  Credential Locker assumed in §4.6/§5. The deviation is deliberate for the framework
+  Credential Locker assumed in §4.2/§4.6. The deviation is deliberate for the framework
   slice and is tracked in [PRV-306/PRV-307](../BACKLOG.md); OAuth tokens remain a PRV-307
   target and no provider UI/surface is wired yet. The encrypted on-disk event cache is a
   PO decision (below, Q7) and remains the next slice (PRV-308), not part of this framework.
@@ -110,8 +110,9 @@ defines what "ready" means, and sequences the work.
 6. **No telemetry and no calendar content logging.** Provider diagnostics log a provider
    id, an opaque account id, a status category, a count and a duration. Never a title,
    location, description, attendee, meeting URL, request/response body, authorization
-   header, token or full subscription URL. Event content is not written to disk in v1;
-   the in-memory cache is the only cache (§5.4).
+   header, token or full subscription URL. **No plaintext event content is written to disk**
+   in v1; an encrypted on-disk cache is the PO decision (Q7) for a separate PRV-308 slice
+   (DPAPI-wrapped key + authenticated encryption, TTL/purge, never logged).
 7. **One provider boundary, one implementation.** Providers implement the existing
    `IEventSource` contract and live in a new `ItsycalForWindows.Providers` library shared
    by both surfaces (§5.1). `IEventSource` itself stays unchanged; provider status is a
@@ -137,10 +138,10 @@ in §3.1.
 | **P0** | **Microsoft Graph** — Outlook.com, Microsoft 365, Exchange Online | [Microsoft Graph v1.0](https://learn.microsoft.com/graph/api/resources/calendar) `me/calendars`, `me/calendarView`, `calendarView/delta` | OAuth 2.0 Authorization Code + PKCE, public client, loopback redirect; `common` authority for MSA + work/school (or `consumers`/`organizations`) | `Calendars.Read` delegated (`offline_access` for refresh) | Read calendar view with recurrence expanded; `Prefer: outlook.timezone`; page through `@odata.nextLink`; delta token with periodic full resync as the window rolls |
 | **P0** | **Yandex Calendar** — Yandex Mail/360 users (PO-named) | CalDAV at `caldav.yandex.ru` (port 443; `8443` documented alternative) | HTTP Basic over TLS with a Yandex **app password** ("Calendar" type); 2FA users must create one | Provider-defined by the app password (calendar) | Preset of the generic CalDAV engine: server/principal pre-filled, app-password instructions and deep link, no OAuth in v1 (no documented public calendar OAuth scope) |
 | **P0** | **Generic CalDAV** — iCloud, Fastmail, Nextcloud, mailbox.org, Synology, Radicale | [CalDAV RFC 4791](https://datatracker.ietf.org/doc/html/rfc4791) + [RFC 6764](https://datatracker.ietf.org/doc/html/rfc6764) discovery; `PROPFIND`, `REPORT calendar-query`, `sync-collection` where supported | URL + username + app password (HTTP Basic over TLS); presets for iCloud (`caldav.icloud.com`), Fastmail (`caldav.fastmail.com`), Nextcloud (`/remote.php/dav`), mailbox.org (`dav.mailbox.org`), custom URL | Provider-defined by the app password | Principal/calendar-home discovery, time-range query, ETag/`sync-token` incremental where available, full resync fallback; TLS validation never disabled |
-| **P1** | **ICS subscriptions** — published Google/Outlook private links, team feeds, `.ics` URLs | HTTP(S) GET of `text/calendar`, existing `IcsParser` | None in v1; token-in-path URLs treated as secrets; reject `user:pass@` userinfo | N/A | `ETag`/`If-None-Match` and `Last-Modified`/`If-Modified-Since`, `304` handling, configurable refresh (15–360 min, default 60, jitter), size cap, no credentials in URL |
+| **P1** | **ICS subscriptions** — published Google/Outlook private links, team feeds, `.ics` URLs | HTTPS GET of `text/calendar` (plus explicit local-file mode) | None in v1; token-in-path URLs treated as secrets; reject `user:pass@` userinfo | N/A | `ETag`/`If-None-Match` and `Last-Modified`/`If-Modified-Since`, `304` handling, configurable refresh (15–360 min, default 60, jitter), size cap, no credentials in URL |
 | **P0** | **Cross-cutting: settings/auth UX** | Shared accounts/settings model + WinUI/Command Palette surfaces | — | — | Add/enable/disable/sign-out/remove account, status, last sync, error state, revoke instructions, no account content in logs |
 | **P0** | **Cross-cutting: token storage** | Windows Credential Locker + DPAPI | — | — | Per-account secrets, no plaintext, rotation/lazy refresh, redaction, deletion on sign-out/remove |
-| **P0** | **Cross-cutting: sync scheduler** | On-demand + in-process background refresh | — | — | Visible-range fetch, in-memory cache, backoff/jitter, `429 Retry-After`, offline and error states, no event content at rest |
+| **P0** | **Cross-cutting: sync scheduler** | On-demand + in-process background refresh | — | — | Visible-range fetch, encrypted on-disk cache (PO Q7; no plaintext event content at rest), backoff/jitter, `429 Retry-After`, offline and error states |
 | **P0** | **Cross-cutting: verification, privacy, security** | Test harness, privacy policy, independent review | — | — | PRV-309/310/311; blocking before the gate |
 | — | **Windows appointment store** | `Windows.ApplicationModel.Appointments` | OS | Read-only | Existing compatibility source; stays |
 | — | **Local `.ics` folder** | Local files, existing parser | None | — | Existing zero-setup path; stays |
@@ -205,7 +206,7 @@ Explicitly **out of v1** (documented, not silently missing):
 | Google/Microsoft refresh tokens | Windows Credential Locker (`PasswordVault`), one entry per account, resource name `Calwren.Provider.<provider>.<accountId>`; access tokens in memory only | OS-managed per-user store, revocable by deletion, no plaintext file. The locker documents a 20-credential-per-app limit, which caps OAuth accounts at 20; the UI reports the limit instead of silently degrading. |
 | CalDAV/Yandex app passwords, ICS token-in-path URLs | DPAPI (`ProtectedData.Protect`, `CurrentUser`, per-account entropy), one encrypted record per account under `%LOCALAPPDATA%\ItsycalForWindows\providers\` | These are broader, longer-lived secrets (an Apple app-specific password works beyond calendar; a Yandex app password is account-scoped). Keeping them device-local avoids syncing them through the Credential Locker's Microsoft-account roaming. ADR 0002's DPAPI baseline is preserved. |
 | Account metadata (provider, display name, enabled, scopes, last sync, error category, delta/sync tokens) | `settings.json` next to existing settings (no event content) | Not secret, but written atomically with a cross-process lock because both surfaces may run. |
-| Event content | In-memory cache only | The product promise is no event content at rest; see §5.4. |
+| Event content | Encrypted on-disk cache per Q7 (DPAPI-wrapped key + authenticated encryption); no plaintext at rest | The product promise is **no plaintext event content at rest**; encrypted cache is PRV-308, this framework keeps only the in-memory placeholder. |
 
 Additional rules: never log or include secrets in exception messages, crash dumps, toast
 text or telemetry (there is no telemetry); redact URLs to scheme+host in logs; clear
@@ -267,7 +268,7 @@ development run), fall back to DPAPI and label the storage mode in diagnostics.
 |---|---|---|
 | Malicious/oversized ICS: RRULE expansion bomb, huge lines/files, malformed UTF-8, adversarial VTIMEZONE | Size cap (existing 2 MB), line-length and occurrence caps, fail-closed on unsupported RRULE (REL-201), parser fuzzing/regression corpus, no code execution from calendar text | A crafted event can still make one refresh slow; bounded by caps and cancellation |
 | Malicious CalDAV/ICS URL: SSRF to localhost/link-local/cloud metadata, redirect to attacker, credentials leaked to another origin | HTTPS only; reject URL userinfo; strip `Authorization` on any cross-origin redirect; block link-local/metadata ranges; cap redirects; allow private/LAN hosts only when the user explicitly enters a self-hosted server (with a warning); no `file:`/other schemes | A user can point the app at their own LAN service by design; that service is user-chosen |
-| Local secret theft (offline disk, another user, backup) | Credential Locker/DPAPI per-user encryption; no plaintext; no event content at rest; deletion on sign-out | Any process running as the same user can ask the OS to decrypt; same-user malware is out of scope and documented |
+| Local secret theft (offline disk, another user, backup) | Credential Locker/DPAPI per-user encryption; no plaintext; no plaintext event content at rest (encrypted cache per Q7); deletion on sign-out | Any process running as the same user can ask the OS to decrypt; same-user malware is out of scope and documented |
 | Loopback redirect hijack / authorization code interception | Bind before browser, PKCE S256, high-entropy `state`, single request, path/Host validation, short timeout; no custom scheme/OOB | A local process racing the port can receive a code it cannot redeem without the verifier |
 | Token replay / refresh-token theft in memory | Access tokens short-lived and memory-only; refresh lazily; rotate when the provider returns a new refresh token; single-flight refresh per account | Memory scraping by same-user malware is not preventable in-process |
 | Malicious provider response: JSON bombs, script/HTML in event text, hostile meeting links | Response size/depth caps, schema validation, render event text as text (never HTML), only `http(s)` meeting links, no auto-open | Provider content is untrusted by definition; keep rendering inert |
@@ -341,19 +342,20 @@ Standalone flyout app ──────┘        │                          
   `Retry-After` on `429`/`503`, cancellation on sign-out/close, maximum two concurrent
   provider requests, one failing account never hides another account's or the local
   events. Auth failures stop automatic retries until the user re-authenticates.
-- **Offline:** last in-memory results stay visible for the session with an "offline"
-  status; after a restart the provider shows "not synced yet" and retries when online.
-  There is no event-content cache on disk in v1 ([Q7](#10-open-questions-for-the-po)).
+- **Offline:** the framework slice keeps last in-memory results visible for the session with
+  an "offline" status and no plaintext event content on disk. The final provider UX (PRV-308)
+  uses the PO-decided **encrypted on-disk cache** (Q7) so events survive restart: DPAPI-wrapped
+  key + authenticated encryption per account, TTL/purge, never logged.
 
 ### 5.4 Cache and persistence
 
-- Per-account, per-range in-memory cache with a short TTL (about 5 minutes) and a bounded
-  event count; evicted on disable/sign-out/remove and on process exit.
-- Persisted: account metadata, scopes, enabled flag, last-sync timestamp, delta/sync token
-  and the secret-store reference — never event fields, attendee lists or bodies.
-- If a future requirement needs offline-across-restart behaviour, an encrypted cache is a
-  separate privacy decision (ADR + privacy-policy update), not a silent implementation
-  detail.
+- **Framework slice (PR #52):** per-account, per-range in-memory cache with a short TTL
+  (~5 minutes) and eviction on disable/sign-out/remove; no event content is written to disk.
+- **Final (PO decision Q7, PRV-308):** encrypted on-disk event cache — DPAPI-wrapped key +
+  authenticated encryption per account, bounded event count, TTL, purge on sign-out/removal,
+  no plaintext and no logging. Plaintext event content at rest is never allowed.
+- Persisted account metadata: provider, display name, enabled flag, scopes, last sync,
+  delta/sync token and secret-store reference — never event fields, attendee lists or bodies.
 
 ### 5.5 Settings and authentication surfaces
 
@@ -425,7 +427,7 @@ not a schedule commitment):
 | PRV-305 | ICS subscriptions (conditional GET, refresh, secrets) | M | PRV-300 |
 | PRV-306 | Settings/auth UX (shared model, AccountsWindow, CmdPal page) | L | PRV-300, PRV-307 |
 | PRV-307 | Secret storage (Credential Locker/DPAPI, rotation, redaction) | M | PRV-300 |
-| PRV-308 | Sync scheduler, in-memory cache, backoff/status | M | PRV-300, first adapter |
+| PRV-308 | Sync scheduler, encrypted on-disk cache (Q7), backoff/status | M | PRV-300, first adapter |
 | PRV-309 | Verification harness/fixture matrix (no live secrets in CI) | M | PRV-301/302/304 |
 | PRV-310 | Privacy/compliance pack (policy, Store answers, deletion/revocation docs) | M | PRV-306 |
 | PRV-311 | Independent security review (OAuth, tokens, threat model) | M | PRV-301/302/304/307 |
@@ -465,7 +467,7 @@ All of the following must be true and evidenced in the tracking issue/PR before
    Nextcloud and mailbox.org (at least one account each; a self-hosted Nextcloud counts).
 2. **End-to-end account lifecycle** — first sign-in, token refresh after expiry, provider
    revocation detected as re-auth-required, sign-out, remove account, no orphaned secrets,
-   no event content in logs or on disk.
+   no plaintext event content in logs or on disk (encrypted cache per Q7).
 3. **Local-first integrity** — with no account configured the app behaves exactly as
    today; one failing/disabled account does not hide local or other-account events; error
    and offline states are visible and recoverable.
@@ -579,9 +581,10 @@ recommendation but does not decide them.
   (October 2026 → April 2027); Graph is the supported path.
 - **Write-first integration (create events, RSVP).** Rejected for v1: read-only is the
   product promise and write safety/conflict handling is a separate design.
-- **Cache event content on disk for offline-first.** Deferred: conflicts with the current
-  no-content-at-rest promise; would need encryption, a privacy-policy update and a
-  retention/delete design ([Q7](#10-open-questions-for-the-po)).
+- **Store plaintext event content on disk for offline-first.** Rejected; the PO decided an
+  **encrypted** on-disk cache instead (Q7/PRV-308): DPAPI-wrapped key + authenticated
+  encryption per account, TTL/purge and a privacy-policy update; plaintext at rest is never
+  acceptable.
 
 ## References
 
