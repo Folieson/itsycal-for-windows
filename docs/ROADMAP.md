@@ -47,13 +47,20 @@ Per ADR 0003 the primary compact UI moves to a standalone WinUI 3 tray flyout (~
 acrylic, hotkey): the month is only for quick date navigation; meeting rows show a video glyph
 indicator; the agenda below shows times/locations/inline details with a `Join meeting` button
 in the expanded details. The PowerToys Command Palette extension remains an optional secondary
-surface with its host constraints (it may scroll, including for an ordinary day, and cannot
-match the primary compactness). Renderer-supported keyboard (Today/prev/next, Enter on actions)
-is expected on both surfaces; per-element UIA names and arrow-key day focus are deferred on the
-CmdPal surface and are implemented in the primary flyout (spec 0004).
+surface, but **it adapts to the flyout's design language** wherever the Adaptive Cards 1.5 host
+allows ([spec 0003](specs/0003-compact-calendar-ui.md) rev 5, UI-105/UI-106): the same composition
+and agenda → inline-details hierarchy, neutral row anatomy, accent discipline, typography/spacing
+tokens and acrylic-forward surfaces. The host still fixes the window, material strength and
+button metrics and the surface may scroll (including for an ordinary day), so it cannot match
+the primary compactness; those are documented host limits, not permission to diverge, and an
+achievable visual/interaction difference is a defect. CmdPal parity follows the flyout's
+accepted visual system as its reference and runs in parallel with the provider platform; it is
+P1 but not a provider/Store-gate blocker. Renderer-supported keyboard (Today/prev/next, Enter on
+actions) is expected on both surfaces; per-element UIA names and arrow-key day focus are deferred
+on the CmdPal surface and are implemented in the primary flyout (spec 0004).
 Plan: [BACKLOG.md](BACKLOG.md). ADR: [0003](adr/0003-surfaces-and-host-strategy.md).
-Spec: [0004-standalone-compact-flyout.md](specs/0004-standalone-compact-flyout.md); optional
-CmdPal surface: [0003-compact-calendar-ui.md](specs/0003-compact-calendar-ui.md).
+Spec: [0004-standalone-compact-flyout.md](specs/0004-standalone-compact-flyout.md); CmdPal
+parity: [0003-compact-calendar-ui.md](specs/0003-compact-calendar-ui.md).
 Shared core: models and providers are already in `ItsycalForWindows.Core` (PR #39); `UpdateService`
 and settings extraction is the remaining ARCH-802 work. The feasibility spike on
 `feat/flyout-spike` is evidence only — packaging, tray lifecycle and the flyout-specific update
@@ -151,25 +158,28 @@ sign-off. Store *preparation* (identity, policy, screenshots, age rating) may pr
 | Google OAuth verification and Entra app registration/tenant consent delay the Store gate | Start registrations at PRV-301/302 kickoff, keep scopes minimal, prepare the demo video and privacy policy from the installed build; graceful "not configured"/admin-consent states; local/WinGet may continue while the Store waits (ADR 0005 Q5). |
 | Store gate slips and the provider epic grows without bound | Gate is an explicit checklist (ADR 0005 §8) with PO sign-off; P0 scope is fixed to Google, Graph, Yandex and generic CalDAV + cross-cutting rows; ICS subscriptions are P1 and do not block the gate. |
 | On-prem Exchange users are excluded | Documented out-of-scope with an EWS follow-up (ADR 0005 Q1); no false "Exchange" claim in README/WinGet/Store text. |
-| Host rendering constraints on the optional CmdPal surface (Adaptive Cards only) | Design within the verified 1.5 subset for that surface; the primary flyout owns its renderer but the installed-build screenshot loop stays mandatory for every visual change. |
+| Host rendering constraints on the optional CmdPal surface (Adaptive Cards only) | Design within the verified 1.5 subset for that surface but keep the primary flyout's design language as the target (spec 0003 rev 5); host limits are documented, not permission to diverge. The primary flyout owns its renderer, and the installed-build screenshot loop stays mandatory for every visual change. |
 | Network/privacy expectations | Network is opt-in per feature/provider, HTTPS only, no telemetry; tokens in the Windows Credential Locker/DPAPI (ADR 0005 §4.2); documented in the privacy section. |
 | Update pipeline trust | MSIX must verify against SHA256SUMS and be signed by the repository certificate; Windows refuses untrusted packages. |
 | Signing certificate cost/time | Self-signed dev channel continues to work; trusted channel is a funding/procurement task tracked in `docs/SIGNING.md`. |
 | Rebrand at v2.0.0 loses name recognition and cannot upgrade in place | [ADR 0004](adr/0004-rebrand-independent-product.md): 1.x bridge releases, uninstall/reinstall migration docs and repository redirects; the rebrand shares the identity break trusted signing already requires. |
 
-## Sequenced backlog (next 10 tickets)
+## Sequenced backlog (next 11 tickets)
 
 1. Finish the compact flyout implementation (spec 0004) and its installed-build evidence.
-2. Shared provider library, registry and contracts (PRV-300); token/secret storage (PRV-307).
-3. Account/settings shell and sync scheduler (PRV-306/PRV-308).
-4. Google Calendar provider (PRV-301) and its OAuth verification submission.
-5. Microsoft Graph provider (PRV-302) for Outlook.com/M365/Exchange Online.
-6. Generic CalDAV engine with Yandex, iCloud, Fastmail, Nextcloud and mailbox.org presets
+2. **CmdPal parity (UI-105/UI-106, spec 0003 rev 5)** — after the flyout's visual system is
+   accepted; run it in parallel with the provider library (item 3), not before or as a blocker
+   of the Store gate. Implementation starts only after the independent spec review.
+3. Shared provider library, registry and contracts (PRV-300); token/secret storage (PRV-307).
+4. Account/settings shell and sync scheduler (PRV-306/PRV-308).
+5. Google Calendar provider (PRV-301) and its OAuth verification submission.
+6. Microsoft Graph provider (PRV-302) for Outlook.com/M365/Exchange Online.
+7. Generic CalDAV engine with Yandex, iCloud, Fastmail, Nextcloud and mailbox.org presets
    (PRV-304/PRV-303).
-7. ICS subscriptions (PRV-305) and recurrence hardening (REL-201).
-8. Verification harness and privacy/compliance pack (PRV-309/PRV-310).
-9. Independent security review (PRV-311).
-10. Store gate and certification (REL-303) after the v2.0 identity is ready; trusted signing
+8. ICS subscriptions (PRV-305) and recurrence hardening (REL-201).
+9. Verification harness and privacy/compliance pack (PRV-309/PRV-310).
+10. Independent security review (PRV-311).
+11. Store gate and certification (REL-303) after the v2.0 identity is ready; trusted signing
     and WinGet follow the PO's decision on ADR 0005 Q5.
 
 ## Definition of done for every roadmap item

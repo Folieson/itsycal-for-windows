@@ -19,6 +19,15 @@ the release workflow reads it to build the GitHub release notes.
   surface and spec 0004 for the primary standalone flyout (`docs/BACKLOG.md`,
   `docs/specs/`).
 - PO decision (ADR 0003): hybrid surfaces — standalone WinUI 3 tray flyout becomes the primary compact UI, CmdPal extension remains optional, custom bottom dock rejected; specs 0004 (primary) and 0003 (optional) in independent review.
+- PO decision (2026-11-08): the optional Command Palette surface **adapts to the primary
+  flyout's visual and interaction language** — same composition and agenda → inline-details
+  hierarchy, neutral row anatomy, accent discipline, typography/spacing rhythm and
+  acrylic-forward surfaces within the verified Adaptive Cards 1.5 host limits
+  ([spec 0003](docs/specs/0003-compact-calendar-ui.md) rev 5,
+  [ADR 0003](docs/adr/0003-surfaces-and-host-strategy.md); backlog UI-105/UI-106, P1). Host-owned
+  limits (window, material strength, button metrics, UIA/keyboard gaps) are not permission to
+  diverge; an achievable visual/interaction difference is a defect. Spec review pending; no
+  implementation yet.
 - PO decision (ADR 0004): the v2.0.0 name is **Calwren** (Cal + wren), chosen by the PO with a
   warm, calm, minimalist wren-on-a-calendar-row brand direction, a terracotta/amber accent on
   neutral, a lowercase `calwren` wordmark and the descriptor `Calwren — calendar for Windows`
@@ -56,8 +65,16 @@ the release workflow reads it to build the GitHub release notes.
   Acceptance still requires re-measurement on the installed MSIX with the committed fixture.
   Spec revision bumped to 4 (revision 3 was approved with notes in docs PR #37; the amendment's
   re-review is pending).
-- Backlog: UI-105 added for optional CmdPal surface polish; ARCH-802 and the UI-101/102 status
-  reflect the merged `ItsycalForWindows.Core` (models + providers) and spec 0004 revision 4.
+- Backlog: UI-105 added for the CmdPal surface (re-scoped to parity by the revision-5 entry
+  above); ARCH-802 and the UI-101/102 status reflect the merged `ItsycalForWindows.Core`
+  (models + providers) and spec 0004 revision 4.
+- Revised spec 0003 to revision 5 with the Command Palette parity mandate: the CmdPal card
+  follows the flyout's composition (month header/navigation, compact agenda header, six week
+  rows, neutral row anatomy, inline details directly under the selected row), reserves accent
+  for the selected day/today and the Join primary action, adds the typography/spacing/surface
+  token map (AC-8), pure Adaptive-Card JSON tests (AC-6) and a documented host-limit/NOT-defect
+  list. Backlog UI-105 moved to P1 and UI-106 added; ADR 0003 and the roadmap record that
+  "optional surface" does not mean divergent UI; independent spec review pending.
 
 ## [1.2.2] - 2026-11-08
 
