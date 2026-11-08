@@ -28,21 +28,30 @@ the release workflow reads it to build the GitHub release notes.
 
 ### Changed
 
-- Revised both compact-UI specs after the round-3 independent spec review. Spec 0003 now scopes
-  the optional CmdPal surface honestly: the impossible no-scroll criterion is deleted, the month
-  budget is measured against the visible ContentPage viewport, Copy uses the normalized
+- Revised both compact-UI specs after the round-3 independent spec review. Spec 0003 was
+  rescoped to the optional CmdPal surface: the impossible no-scroll criterion is deleted, the
+  month budget is measured against the visible ContentPage viewport, Copy uses the normalized
   `AbsoluteUri` through an injectable clipboard helper, and the planned fixture covers
-  all-day/multi-day rows (with MSIX `%LOCALAPPDATA%` virtualisation to verify). Spec 0004 now
-  defines a 448–600 DIP content-hugging client height (480 ±16 DIP collapsed, grow-to-600 then
-  scroll), splits material/positioning/DPI/keyboard/packaging/update criteria, separates the
-  flyout update path from the CmdPal updater, records the merged shared core and the remaining
-  ARCH-802 work, adds empty/loading/error states, and marks the feasibility spike as
-  non-acceptance evidence.
-- Amended spec 0004's collapsed-height target from 480 ±16 to **544 ±16 DIP** after the v3
-  five-row ordinary-fixture measurement (measured 547 DIP, 220-DIP month block within the
-  224-DIP cap, 600-DIP expanded cap); the 448-DIP floor and 600-DIP ceiling are unchanged.
+  all-day/multi-day rows (with MSIX `%LOCALAPPDATA%` virtualisation to verify). Spec 0004 then
+  defined a 448–600 DIP content-hugging client height (grow-to-600 then scroll; the original
+  480 ±16 DIP collapsed estimate was later superseded by the measured amendment below), split
+  material/positioning/DPI/keyboard/packaging/update criteria, separated the flyout update path
+  from the CmdPal updater, recorded the merged shared core and the remaining ARCH-802 work,
+  added empty/loading/error states, and marked the feasibility spike as non-acceptance
+  evidence.
+- Amended spec 0004's collapsed-height target from the 480 ±16 DIP estimate to **544 ±16 DIP**
+  (528–560) after the v3 five-row ordinary-fixture measurement. The v3 numbers are
+  **preliminary** evidence from the unpackaged v3 build with an in-memory replica of the
+  fixture (not the installed MSIX or the committed `.ics` fixture): client **547 DIP** from a
+  **546-DIP** layout (302 DIP fixed content above the agenda: 50 outer card chrome + 220 month
+  block + 10 gap + 18 agenda header + 4 gap; 228 DIP of rows: 47 + 47 + 47 + 40 + 47, four
+  two-line plus one 40-DIP one-line; 16 DIP spacing: 4 × 4; 1-DIP rounding/headroom), with the
+  220-DIP month block inside the 224-DIP cap and the expanded height capped at 600 DIP.
+  Acceptance still requires re-measurement on the installed MSIX with the committed fixture.
+  Spec revision bumped to 4 (revision 3 was approved with notes in docs PR #37; the amendment's
+  re-review is pending).
 - Backlog: UI-105 added for optional CmdPal surface polish; ARCH-802 and the UI-101/102 status
-  reflect the merged `ItsycalForWindows.Core` (models + providers) and spec 0004 revision 3.
+  reflect the merged `ItsycalForWindows.Core` (models + providers) and spec 0004 revision 4.
 
 ## [1.2.2] - 2026-11-08
 
