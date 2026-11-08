@@ -15,7 +15,7 @@
     <RootNamespace>ItsycalForWindows</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Platforms>x64</Platforms>
+    <Platforms>x64;ARM64</Platforms>
 
     <!-- Plain class library: packaging stays in the two application projects. -->
     <WindowsPackageType>None</WindowsPackageType>

@@ -7,7 +7,7 @@
           <!-- Only the extension and the shared Core assembly count; the test assembly would
                otherwise inflate the number with its own lines. -->
           <Format>cobertura</Format>
-          <Include>[ItsycalForWindows*]*</Include>
+          <Include>[ItsycalForWindows]*,[ItsycalForWindows.Core]*</Include>
           <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <SkipAutoProps>true</SkipAutoProps>
         </Configuration>
