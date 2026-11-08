@@ -48,6 +48,19 @@ GitHub/npm/NuGet IDs, WinGet/Store identity and the final icon/wordmark remain p
 WinGet listing and any Store listing ship under the new name and Publisher, while the 1.x
 line stays a bridge.
 
+## PO decision — 2026-11-08: Store publication gated on external providers
+
+The user (PO) decided that Microsoft Store publication — and the trusted-signing/Store
+submission that goes with it — is **gated** until the app is fully functional for the
+calendars people actually use: Exchange/Outlook, Gmail, Yandex Mail/Calendar and the other
+major/popular sources. A local-only build (Windows appointment store plus exported `.ics`)
+would be judged broken in Store review and by first-run users. The provider epic therefore
+moves ahead of Store submission; it does not change the read-only or privacy promises. The
+decision, provider matrix, security model, architecture and gate criteria are
+[ADR 0005](adr/0005-external-calendar-providers-and-store-gate.md); the rows are
+[PRV-300 … PRV-311 and REL-303](#provider-epic--store-gate-adr-0005). Open PO questions
+(scope, registrations, WinGet timing) are listed in the ADR.
+
 ## Now / next / later
 
 | ID | Priority | Item | Outcome / acceptance | Status |
@@ -66,7 +79,6 @@ line stays a bridge.
 | REL-202 | P2 | Remaining reliability findings | Version/updater minors (TOCTOU, log encoding), release/CI gates (tests on release tags, ARM64, `winget validate`, branch protection), docs accuracy. | Planned |
 | SET-401 | P2 | Settings consolidation | One Settings page: Calendar / Dock / Calendars / Updates; human labels, dock-format preview, update status. | Planned |
 | DOC-501 | P2 | Dock band screenshot + release evidence | Enable PowerToys Dock, capture dark/light/narrow, attach to README; release checklist. | Planned |
-| PRV-301 | P3 | Provider platform (Google/Graph/CalDAV) | OAuth/CalDAV, DPAPI tokens, per-provider settings; ADR 0002. Deferred until UI/onboarding are done. | Deferred |
 | LOC-601 | P1 | Localization platform + Russian and English | Externalize **every** user-visible string (Command Palette commands/pages/toasts, standalone flyout, settings, errors, empty/loading states, About, package display name, README/Store listing metadata) into a resource system (`.resw`/PRI or an equivalent typed catalog) with culture-aware date/time/number/plural formatting. Ship `en-US` as source and `ru-RU` as the first complete translation; add pseudo-localization for CI/layout checks. Default language follows the Windows display language (`ApplicationLanguages`), with no hardcoded English UI strings left in code. | Planned — P1 pre-Store |
 | LOC-602 | P1 | Language switcher and popular-language set | Settings language override with **System language (default)** plus an explicit list; the choice applies consistently to the palette extension and the standalone flyout (reload/restart behavior documented) and is persisted in app settings. Tier 1 target: `ru-RU`, `de-DE`, `fr-FR`, `es-ES`, `pt-BR`, `it-IT`, `pl-PL`, `tr-TR`, `ja-JP`, `ko-KR`, `zh-Hans`, `zh-Hant`, `uk-UA`; every shipped language must have complete UI coverage, not partial machine translation. Store listing/WinGet descriptions localized for the shipped set. | Planned — depends on LOC-601 |
 | LOC-603 | P1 | Localized UI adaptation and verification | Verify layouts do not break with longer strings (German/Russian/Polish/Turkish), CJK glyphs/font fallback, plural forms, and RTL readiness if an RTL language is added. Capture installed-build screenshots per shipped language for the palette and flyout (month/weekday/date formats, agenda, long event titles, details/actions, empty/error states), run design review per language, and keep a pseudo-locale CI check for clipping/truncation. Date/time formats must follow the selected culture (including the current `MMM d` hardcode). | Planned — depends on LOC-601/602 |
@@ -77,6 +89,39 @@ Deferred ONB-101 items after ONB-101a (PR #42): `.ics` import file picker / drag
 per-source status (name, last read, parse errors), and an empty-state call-to-action beyond the
 folder pointer. [Spec 0005](specs/0005-calendar-folder-onboarding.md) lists the same set under
 Out of scope.
+
+## Provider epic — Store gate (ADR 0005)
+
+The provider epic is P0 because the Store listing is blocked until it is done. The full
+decision, provider matrix and gate criteria are
+[ADR 0005](adr/0005-external-calendar-providers-and-store-gate.md). PRV-301 was previously
+the deferred P3 provider-platform row; this plan reassigns it to Google Calendar and makes
+**PRV-300** the umbrella. Sizes are indicative (S ≤ ~1 week, M ~2–3 weeks, L ~4–6 weeks of
+one engineer including tests), not schedule promises.
+
+| ID | Priority | Item | Acceptance / outcome | Size | Depends on | Status |
+|---|---|---|---|---|---|---|
+| PRV-300 | P0 | Provider epic, registry and shared contracts | New `ItsycalForWindows.Providers` library referenced by both surfaces; provider registry/descriptor + `IEventSource` adapters + a status contract; no provider logic duplicated in Core or either app; ADR 0005 gate accepted and its open scope questions resolved or explicitly deferred. | M | — | Planned |
+| PRV-301 | P0 | Google Calendar (Gmail/Workspace) | Google Calendar API v3, OAuth 2.0 authorization code + PKCE on loopback, `calendar.readonly`, `syncToken` incremental with full resync on `410`, Workspace admin-policy error handled; verified on an installed signed MSIX with a personal and a Google Workspace account. | L | PRV-300, PRV-307 | Planned |
+| PRV-302 | P0 | Microsoft Graph (Outlook.com/M365/Exchange Online) | Graph `me/calendars` + `me/calendarView` + delta, OAuth 2.0 public client + PKCE, `Calendars.Read` delegated; Outlook.com and a Microsoft 365 tenant verified; tenant admin-consent-required handled; on-prem Exchange explicitly out of v1 (EWS follow-up, PO Q1). | L | PRV-300, PRV-307 | Planned |
+| PRV-303 | P0 | Yandex Calendar | CalDAV preset at `caldav.yandex.ru` with app password (2FA guidance + deep link), no public OAuth assumed; verified with a 2FA-enabled account; app-password revocation instructions. | S | PRV-304, PRV-307 | Planned |
+| PRV-304 | P0 | Generic CalDAV engine + presets | RFC 4791/6764 principal and calendar-home discovery, time-range `REPORT`, ETag/`sync-token` incremental with full-resync fallback; presets validated on iCloud, Fastmail, Nextcloud and mailbox.org; TLS validation never disabled. | L | PRV-300, PRV-307 | Planned |
+| PRV-305 | P1 | ICS subscriptions (HTTP(S) + local) | `ETag`/`If-Modified-Since` and `304`, configurable refresh with jitter, size cap, existing parser reused; no `user:pass@` credentials; token-in-path feeds treated as secrets; not a Store-gate blocker (local `.ics` already works). | M | PRV-300, PRV-307 | Planned |
+| PRV-306 | P0 | Settings and authentication UX | One shared account model; add/enable/disable/sign-in/re-authenticate/sign-out/remove; status, last sync and error states; full `AccountsWindow` on the primary surface + Command Palette status page (ADR 0005 §5.5); installed-build screenshots read back. | L | PRV-300, PRV-307 | Planned |
+| PRV-307 | P0 | Token and secret storage | Refresh tokens in the Windows Credential Locker, app passwords/token URLs in DPAPI per account, atomic rotation, no plaintext, redaction tests, deletion on sign-out/remove; 20-entry locker cap handled. | M | PRV-300 | Planned |
+| PRV-308 | P0 | Sync scheduler, cache and status | On-demand visible-range fetch plus in-process background refresh (no service/task), in-memory cache only, backoff/jitter, `429 Retry-After`, offline and partial-failure states; local sources never hidden. | M | PRV-300, first adapter | Planned |
+| PRV-309 | P0 | Verification harness and provider test matrix | Recorded-fixture contract tests for Google/Graph/CalDAV/ICS, parser fuzz corpus, live-account manual matrix documented; CI never stores real tokens/accounts. | M | PRV-301, PRV-302, PRV-304 | Planned |
+| PRV-310 | P0 | Privacy/compliance pack | Privacy policy at a project-owned URL, Store privacy answers, revocation/deletion instructions per provider, capability justification (`internetClient`, possibly `privateNetworkClientServer`), no-telemetry network-capture evidence. | M | PRV-306 | Planned |
+| PRV-311 | P0 | Independent security review | Read-only review of OAuth/loopback, token storage, redirects, SSRF/ICS handling and logging; no blocking findings, or deferred with PO agreement; re-run after material changes. | M | PRV-301, PRV-302, PRV-304, PRV-307 | Planned |
+| REL-303 | P0 | Store gate and certification pack | No Store submission before ADR 0005 §8 is met; dedicated certification test accounts/app passwords, screenshots from the installed build, age rating, capability/support notes, v2.0 identity + trusted certificate; explicit PO sign-off. | S | All P0 + PRV-311 | Gated — ADR 0005 §8 |
+
+**Order:** PRV-300/PRV-307/PRV-306 start first (contracts, secrets, settings shell);
+PRV-301 and PRV-302 run in parallel; PRV-304 unlocks PRV-303 and the iCloud/Fastmail/
+Nextcloud/mailbox.org presets; PRV-305 runs alongside; PRV-308 lands with the first adapter;
+PRV-309/PRV-310 run alongside; PRV-311 precedes the gate; REL-303 is last. Local builds,
+the existing local app and non-Store work continue while the gate is closed. On-prem
+Exchange (Q1), write providers (Q2) and an encrypted offline cache (Q7) are explicitly
+deferred in the ADR.
 
 ## Dependencies and constraints
 
@@ -90,12 +135,21 @@ Out of scope.
   Adaptive Card) and the declared palette window size. The primary standalone flyout owns a
   WinUI 3 window (spec 0004); it is no longer constrained to the palette card. The CmdPal
   surface may scroll; the no-scroll contract belongs to the flyout only.
-- Providers wait for onboarding and the UI: the settings/status surface is the same one
-  sources will use.
+- Providers depend on the settings/status surface (PRV-306) and the shared provider library
+  (PRV-300); they are now a Store-gate item ([ADR 0005](adr/0005-external-calendar-providers-and-store-gate.md)),
+  not a deferred P3. `IEventSource` stays the data contract, provider logic lives in
+  `ItsycalForWindows.Providers`, and neither app may fork it.
+- Microsoft Store submission is blocked until ADR 0005 §8 is met (the P0 provider rows,
+  PRV-311 and REL-303). Trusted signing, the v2.0 package identity and WinGet may proceed
+  only with the PO's decision on ADR 0005 Q5; no Store package is submitted early.
+- Provider v1 is read-only and opt-in per account: no write scopes, no telemetry, no event
+  content on disk or in logs, tokens per ADR 0005 §4.2. On-prem Exchange, write support and an
+  encrypted offline cache are out of v1 (ADR 0005 Q1/Q2/Q7).
 - Every user-visible change adds a `CHANGELOG.md` line under `[Unreleased]`; a release tag
   requires a matching `## [X.Y.Z]` section.
 - Rebranding is a package-identity change ([ADR 0004](adr/0004-rebrand-independent-product.md)):
   the 1.x and 2.0 packages have different family names, so there is no in-place MSIX upgrade.
   Migration docs must instruct uninstall/reinstall, and trusted/Store signing waits for the new
   Publisher/PFN (BRAND-901/BRAND-902). The name Calwren is chosen; clearance and identifier
-  reservations are still pending, and no rename ships before v2.0.0.
+  reservations are still pending, and no rename ships before v2.0.0. The Store listing also
+  waits for the provider gate (ADR 0005).
