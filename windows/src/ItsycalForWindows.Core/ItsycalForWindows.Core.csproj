@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Shared calendar core (ADR 0003, backlog ARCH-802). The Command Palette extension and the
+    standalone flyout both reference this project so the calendar domain and the event providers
+    have exactly one implementation. Namespaces stay `ItsycalForWindows.Models` and
+    `ItsycalForWindows.Services` so existing consumers and tests do not change.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <!-- Must match the consuming projects: a different projection package fails with NETSDK1148. -->
+    <WindowsSdkPackageVersion>10.0.26100.68-preview</WindowsSdkPackageVersion>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>ItsycalForWindows</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>x64;ARM64</Platforms>
+
+    <!-- Plain class library: packaging stays in the two application projects. -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>false</EnableMsixTooling>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The DEBUG-only appointment-store diagnostics are internal to the shared core; the
+         extension's DEBUG commands (demo data, access probe) still call them. -->
+    <InternalsVisibleTo Include="ItsycalForWindows" />
+    <InternalsVisibleTo Include="ItsycalForWindows.Flyout" />
+  </ItemGroup>
+
+</Project>
