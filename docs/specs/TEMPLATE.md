@@ -34,3 +34,9 @@ List the tests that must fail before the implementation and pass after it (TDD o
 ## Out of scope
 
 What deliberately is not part of this change.
+## Review
+
+- Spec reviewer: <!-- agent/role, not the author -->
+- Verdict: <!-- approve / approve with notes / request changes -->
+- Date:
+- Blocking findings resolved: <!-- links or notes -->
