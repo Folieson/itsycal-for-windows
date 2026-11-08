@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
@@ -22,7 +23,7 @@ using WinRT.Interop;
 
 namespace ItsycalForWindows.Flyout;
 
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window, IDisposable
 {
     private const double BaseWidthDip = 360;
 
@@ -62,13 +63,20 @@ public sealed partial class MainWindow : Window
     private Button? _copyButton;
     private StackPanel? _actionsPanel;
     private Func<bool>? _focusOnActivate;
-    private double _currentHeightDip = MinHeightDip;
+    private DisplayAreaWatcher? _displayWatcher;
+    private XamlRoot? _xamlRoot;
+    private double _lastRasterizationScale = 1.0;
+    private long _lightDismissHiddenAtTicks;
     private int _focusAttempts;
+    private int _lightDismissGeneration;
     private bool _windowActive;
     private bool _focusVerifyQueued;
     private bool _readyToLog;
     private bool _exiting;
     private bool _hidden;
+    private bool _lightDismissPending;
+    private int _relayoutQueued;
+    private bool _disposed;
 
     public MainWindow()
     {
@@ -78,28 +86,47 @@ public sealed partial class MainWindow : Window
         SystemBackdrop = new DesktopAcrylicBackdrop();
 
         ConfigureWindow();
+
+        // The tray must exist before the first ResizeToContent call: positioning asks it for the
+        // icon rectangle and falls back to the cursor monitor while it is unavailable.
+        _tray = new TrayIcon(DispatcherQueue, ToggleFromTray, ToggleFromHotkey, ExitApplication);
+        _tray.IconAvailabilityChanged += (_, available) =>
+        {
+            RefreshStatusLine();
+
+            // If Explorer restarted and the icon could not be re-added, a hidden flyout with
+            // no hotkey would be unreachable. Surface it (and its Ctrl+Q route) instead.
+            if (!available && !_tray.HotkeyRegistered)
+            {
+                ShowFlyout();
+            }
+        };
+        StartDisplayWatcher();
+
         SeedFakeEvents();
         BuildWeekdayHeader();
         BuildCalendar();
         ShowSelectedDay(_selected);
         ApplyCaptureState();
         SetUpKeyboard();
-
-        _tray = new TrayIcon(ToggleOverlay, ExitApplication);
-        // The shell sometimes rejects the icon while the XAML window is still being created;
-        // retry once the dispatcher loop is pumping (after OnLaunched returns).
-        DispatcherQueue.TryEnqueue(() => _tray.RetryAddIcon());
+        RefreshStatusLine();
 
         Activated += (_, args) =>
         {
             _windowActive = args.WindowActivationState != WindowActivationState.Deactivated;
-            if (args.WindowActivationState == WindowActivationState.Deactivated && !_exiting && !_stayVisible)
+            if (args.WindowActivationState == WindowActivationState.Deactivated)
             {
-                _hidden = true;
-                AppWindow.Hide();
+                // Light dismiss is deferred by one dispatcher turn so the tray callback that
+                // caused it can cancel it. Without the deferral the sequence is
+                // deactivate -> hide -> tray callback -> re-show (the toggle race).
+                if (!_exiting && !_stayVisible)
+                {
+                    QueueLightDismiss();
+                }
             }
             else
             {
+                CancelPendingLightDismiss();
                 _hidden = false;
                 if (_windowActive)
                 {
@@ -114,6 +141,7 @@ public sealed partial class MainWindow : Window
         RootHost.Loaded += (_, _) =>
         {
             _readyToLog = true;
+            AttachXamlRoot();
             // The first ShowSelectedDay runs before the window is loaded; settle the real
             // actuals now so the initial client height hugs the five-row fixture.
             ResizeToContent();
@@ -125,14 +153,23 @@ public sealed partial class MainWindow : Window
         };
         AppWindow.Closing += (_, args) =>
         {
-            if (!_exiting)
+            if (_exiting)
             {
-                args.Cancel = true;
-                _hidden = true;
-                AppWindow.Hide();
+                return;
             }
+
+            if (!_tray.IsIconVisible)
+            {
+                // No tray icon: the flyout is the only remaining surface, so Close exits
+                // instead of hiding an app the user could no longer reach.
+                _exiting = true;
+                return;
+            }
+
+            args.Cancel = true;
+            HideFlyout();
         };
-        Closed += (_, _) => _tray.Dispose();
+        Closed += (_, _) => Dispose();
     }
 
     private static double ReadUiScale()
@@ -153,6 +190,10 @@ public sealed partial class MainWindow : Window
             presenter.IsResizable = false;
             presenter.IsAlwaysOnTop = true;
         }
+
+        // The flyout is a transient tray surface, not a document window. Keep it out of the
+        // taskbar and Alt+Tab; the tray icon and hotkey are its entry points.
+        AppWindow.IsShownInSwitchers = false;
 
         var corner = DwmWindowCornerPreference.Round;
         _ = DwmSetWindowAttribute(WindowNative.GetWindowHandle(this), DwmWindowAttribute.WindowCornerPreference, ref corner, sizeof(int));
@@ -184,7 +225,10 @@ public sealed partial class MainWindow : Window
                             + DayGrid.Margin.Bottom
                             + AgendaHeaderRow.ActualHeight
                             + AgendaHeaderRow.Margin.Bottom
-                            + AgendaPanel.ActualHeight;
+                            + AgendaPanel.ActualHeight
+                            + (SystemStatusText.Visibility == Visibility.Visible
+                                ? SystemStatusText.ActualHeight + SystemStatusText.Margin.Top
+                                : 0);
             DiagnosticLog.Write(
                 string.Create(
                     CultureInfo.InvariantCulture,
@@ -195,7 +239,7 @@ public sealed partial class MainWindow : Window
             // The constructor calls ShowSelectedDay before the content is in the visual tree,
             // where TransformToVisual is not available yet. The Loaded handler re-runs this
             // method once the actuals exist; until then fall back to a plain measure.
-            DiagnosticLog.Write("MEASURE fallback: " + ex.Message);
+            DiagnosticLog.Write("MEASURE fallback kind=" + ex.GetType().Name);
             RootGrid.Measure(new Size(BaseWidthDip, double.PositiveInfinity));
             contentHeight = RootGrid.DesiredSize.Height;
         }
@@ -210,7 +254,6 @@ public sealed partial class MainWindow : Window
         // fraction of a DIP, which otherwise leaves a 1 DIP scrollable gap and a scrollbar on
         // the five-row collapsed fixture.
         var heightDip = Math.Clamp(Math.Ceiling(contentHeight) + 1, MinHeightDip, MaxHeightDip);
-        _currentHeightDip = heightDip;
 
         var hwnd = WindowNative.GetWindowHandle(this);
         var dpiScale = GetDpiForWindow(hwnd) / 96.0;
@@ -239,40 +282,408 @@ public sealed partial class MainWindow : Window
         }
 
         AppWindow.Resize(new SizeInt32(widthPx + frameWidth, heightPx + frameHeight));
-        PositionNearTray(widthPx + frameWidth, heightPx + frameHeight, dpiScale);
+        PositionFlyout(widthPx + frameWidth, heightPx + frameHeight, dpiScale);
         QueueLayoutLog();
     }
 
-    private void PositionNearTray(int width, int height, double scale)
+    /// <summary>
+    /// Production start: hidden when the tray icon gives us a way back, visible for the
+    /// screenshot workflow and whenever the tray icon is unavailable (the flyout then carries
+    /// the visible quit route).
+    /// </summary>
+    public bool ShouldStartVisible => _stayVisible || !_tray.IsIconVisible;
+
+    public void ShowFlyout()
     {
-        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
-        var work = area.WorkArea;
-        var margin = (int)Math.Round(12 * scale);
-        var x = work.X + work.Width - width - margin;
-        var y = work.Y + work.Height - height - margin;
-        AppWindow.Move(new PointInt32(x, y));
+        if (_disposed)
+        {
+            return;
+        }
+
+        CancelPendingLightDismiss();
+        _lightDismissHiddenAtTicks = 0;
+        _hidden = false;
+        DiagnosticLog.Write("FLYOUT show");
+
+        // Reposition before the window becomes visible so it never flashes at a stale spot.
+        RepositionCurrentWindow();
+        AppWindow.Show();
+        Activate();
     }
 
-    private void ToggleOverlay()
+    private void HideFlyout()
     {
-        if (_hidden || !AppWindow.IsVisible)
+        CancelPendingLightDismiss();
+        HideFlyoutCore();
+    }
+
+    private void HideFlyoutCore()
+    {
+        _hidden = true;
+        DiagnosticLog.Write("FLYOUT hide");
+        AppWindow.Hide();
+    }
+
+    private void QueueLightDismiss()
+    {
+        if (_disposed || _hidden || _stayVisible || _exiting)
         {
-            AppWindow.Show();
-            Activate();
-            _hidden = false;
+            return;
+        }
+
+        // With neither tray icon nor hotkey there is no way to bring a hidden flyout back.
+        // Keep it on screen so its Close/Ctrl+Q route stays reachable.
+        if (!_tray.IsIconVisible && !_tray.HotkeyRegistered)
+        {
+            return;
+        }
+
+        _lightDismissPending = true;
+        var generation = ++_lightDismissGeneration;
+        DiagnosticLog.Write("LIGHTDISMISS queued");
+        if (!DispatcherQueue.TryEnqueue(() =>
+            {
+                if (_disposed || !_lightDismissPending || generation != _lightDismissGeneration)
+                {
+                    return;
+                }
+
+                _lightDismissPending = false;
+                _lightDismissHiddenAtTicks = Environment.TickCount64;
+                DiagnosticLog.Write("LIGHTDISMISS hide");
+                HideFlyoutCore();
+            }))
+        {
+            _lightDismissPending = false;
+        }
+    }
+
+    private void CancelPendingLightDismiss()
+    {
+        _lightDismissPending = false;
+        _lightDismissGeneration++;
+    }
+
+    /// <summary>
+    /// Tray click toggle. When the click's activation change is still pending, the click owns
+    /// the action: close immediately and cancel the deferred light-dismiss callback. If the
+    /// deferred hide won the race, the same click has already closed the flyout, so it must not
+    /// instantly re-open it.
+    /// </summary>
+    private void ToggleFromTray()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        DiagnosticLog.Write($"TOGGLE source=tray pending={_lightDismissPending} visible={!_hidden && AppWindow.IsVisible}");
+
+        if (_lightDismissPending)
+        {
+            HideFlyout();
+            return;
+        }
+
+        if (!_hidden && AppWindow.IsVisible)
+        {
+            HideFlyout();
+            return;
+        }
+
+        var lightDismissedRecently = _lightDismissHiddenAtTicks != 0
+                                     && Environment.TickCount64 - _lightDismissHiddenAtTicks <= 400;
+        _lightDismissHiddenAtTicks = 0;
+        if (lightDismissedRecently)
+        {
+            return;
+        }
+
+        ShowFlyout();
+    }
+
+    private void ToggleFromHotkey()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        DiagnosticLog.Write($"TOGGLE source=hotkey pending={_lightDismissPending} visible={!_hidden && AppWindow.IsVisible}");
+
+        if (!_hidden && AppWindow.IsVisible)
+        {
+            HideFlyout();
         }
         else
         {
-            _hidden = true;
-            AppWindow.Hide();
+            ShowFlyout();
         }
     }
 
     private void ExitApplication()
     {
+        if (_exiting)
+        {
+            return;
+        }
+
         _exiting = true;
-        _tray.Dispose();
+        // Closed disposes the tray, hotkey, display watcher and single-instance objects.
         Close();
+    }
+
+    /// <summary>
+    /// Physical-pixel placement. Preferred anchor is the notification icon rectangle, which
+    /// keeps the flyout above the correct taskbar edge on multi-monitor and non-bottom taskbars.
+    /// Falls back to the cursor's monitor, then the primary monitor; always clamps into a work
+    /// area. Called again on every show and after display/DPI changes.
+    /// </summary>
+    private void PositionFlyout(int width, int height, double scale)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        var margin = (int)Math.Round(12 * scale);
+        DisplayArea? area = null;
+        var x = 0;
+        var y = 0;
+        var anchoredToTray = false;
+
+        if (_tray.TryGetIconRect(out var iconRect))
+        {
+            try
+            {
+                area = DisplayArea.GetFromPoint(
+                    new PointInt32((iconRect.Left + iconRect.Right) / 2, (iconRect.Top + iconRect.Bottom) / 2),
+                    DisplayAreaFallback.Nearest);
+            }
+            catch (Exception)
+            {
+                area = null;
+            }
+
+            if (area is not null)
+            {
+                var work = area.WorkArea;
+                x = iconRect.Right - width;
+                y = iconRect.Top - height - margin;
+                if (y < work.Y)
+                {
+                    // Taskbar at the top: open below the icon instead of off-screen.
+                    y = iconRect.Bottom + margin;
+                }
+
+                anchoredToTray = true;
+            }
+        }
+
+        if (!anchoredToTray)
+        {
+            area = DisplayAreaFromCursor();
+            if (area is null)
+            {
+                try
+                {
+                    area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+                }
+                catch (Exception)
+                {
+                    area = null;
+                }
+            }
+
+            area ??= DisplayArea.Primary;
+            var work = area.WorkArea;
+            x = work.X + work.Width - width - margin;
+            y = work.Y + work.Height - height - margin;
+        }
+
+        var workArea = (area ?? DisplayArea.Primary).WorkArea;
+        var maxX = Math.Max(workArea.X, workArea.X + workArea.Width - width);
+        var maxY = Math.Max(workArea.Y, workArea.Y + workArea.Height - height);
+        x = Math.Clamp(x, workArea.X, maxX);
+        y = Math.Clamp(y, workArea.Y, maxY);
+        AppWindow.Move(new PointInt32(x, y));
+    }
+
+    private void RepositionCurrentWindow()
+    {
+        try
+        {
+            var hwnd = WindowNative.GetWindowHandle(this);
+            var scale = GetDpiForWindow(hwnd) / 96.0;
+            var size = AppWindow.Size;
+            PositionFlyout(size.Width, size.Height, scale);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLog.Write("POSITION failed kind=" + ex.GetType().Name);
+        }
+    }
+
+    private static DisplayArea? DisplayAreaFromCursor()
+    {
+        try
+        {
+            if (GetCursorPos(out var point))
+            {
+                return DisplayArea.GetFromPoint(
+                    new PointInt32(point.X, point.Y),
+                    DisplayAreaFallback.Nearest);
+            }
+        }
+        catch (Exception)
+        {
+            // Fall back to the primary display.
+        }
+
+        return null;
+    }
+
+    private void StartDisplayWatcher()
+    {
+        try
+        {
+            _displayWatcher = DisplayArea.CreateWatcher();
+            _displayWatcher.Added += (_, _) => QueueRelayout();
+            _displayWatcher.Removed += (_, _) => QueueRelayout();
+            _displayWatcher.Updated += (_, _) => QueueRelayout();
+            _displayWatcher.Start();
+        }
+        catch (Exception ex)
+        {
+            // Re-layout also happens through XamlRoot.Changed and on every show; this watcher
+            // is the early warning for resolution/DPI/work-area changes.
+            DiagnosticLog.Write("DISPLAY watcher unavailable kind=" + ex.GetType().Name);
+        }
+    }
+
+    private void QueueRelayout()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        // DisplayAreaWatcher callbacks are not guaranteed to arrive on the UI thread; the
+        // interlocked gate keeps concurrent display events from queuing duplicate layouts.
+        if (Interlocked.Exchange(ref _relayoutQueued, 1) == 1)
+        {
+            return;
+        }
+
+        if (!DispatcherQueue.TryEnqueue(() =>
+            {
+                Interlocked.Exchange(ref _relayoutQueued, 0);
+                if (_disposed)
+                {
+                    return;
+                }
+
+                ResizeToContent();
+            }))
+        {
+            Interlocked.Exchange(ref _relayoutQueued, 0);
+        }
+    }
+
+    private void AttachXamlRoot()
+    {
+        var root = RootHost.XamlRoot;
+        if (root is null || ReferenceEquals(_xamlRoot, root))
+        {
+            return;
+        }
+
+        if (_xamlRoot is not null)
+        {
+            _xamlRoot.Changed -= OnXamlRootChanged;
+        }
+
+        _xamlRoot = root;
+        _lastRasterizationScale = root.RasterizationScale;
+        root.Changed += OnXamlRootChanged;
+    }
+
+    private void OnXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args)
+    {
+        // Size changes caused by our own ResizeToContent must not queue another resize; only a
+        // rasterization-scale (DPI) change needs a new physical-pixel layout.
+        if (Math.Abs(sender.RasterizationScale - _lastRasterizationScale) < 0.001)
+        {
+            return;
+        }
+
+        _lastRasterizationScale = sender.RasterizationScale;
+        QueueRelayout();
+    }
+
+    private void RefreshStatusLine()
+    {
+        var trayAvailable = _tray.IsIconVisible;
+        var hotkeyAvailable = _tray.HotkeyRegistered;
+
+        // The capture workflow forces the window visible in a low-integrity sandbox where the
+        // shell refuses notification icons. Those sandbox-only warnings are not part of the UI
+        // under review, so they must not change the captured pixels.
+        if (_stayVisible || (trayAvailable && hotkeyAvailable))
+        {
+            if (SystemStatusText.Visibility != Visibility.Collapsed)
+            {
+                SystemStatusText.Text = string.Empty;
+                SystemStatusText.Visibility = Visibility.Collapsed;
+                ResizeToContent();
+            }
+
+            return;
+        }
+
+        var text = !trayAvailable && !hotkeyAvailable
+            ? "Tray icon and Ctrl+Alt+C are unavailable. Press Ctrl+Q to quit."
+            : !trayAvailable
+                ? "Tray icon unavailable. Press Ctrl+Alt+C to reopen, or Ctrl+Q to quit."
+                : "Ctrl+Alt+C is unavailable. Open Itsycal from the tray icon; press Ctrl+Q to quit.";
+
+        if (!string.Equals(SystemStatusText.Text, text, StringComparison.Ordinal))
+        {
+            SystemStatusText.Text = text;
+        }
+
+        SystemStatusText.Visibility = Visibility.Visible;
+        ResizeToContent();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        CancelPendingLightDismiss();
+
+        if (_xamlRoot is not null)
+        {
+            _xamlRoot.Changed -= OnXamlRootChanged;
+            _xamlRoot = null;
+        }
+
+        try
+        {
+            _displayWatcher?.Stop();
+        }
+        catch (Exception)
+        {
+            // The watcher may already be stopped by the OS.
+        }
+
+        _displayWatcher = null;
+        _tray.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private void SeedFakeEvents()
@@ -431,7 +842,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private UIElement BuildDayContent(DateOnly date, DateOnly today, bool isSelected)
+    private StackPanel BuildDayContent(DateOnly date, DateOnly today, bool isSelected)
     {
         var panel = new StackPanel
         {
@@ -551,11 +962,12 @@ public sealed partial class MainWindow : Window
             UseSystemFocusVisuals = true,
         };
         var rowMeta = RowMeta(item);
+        var hasLink = MeetingLinks.IsUsable(item.MeetingLink);
         AutomationProperties.SetName(
             row,
             $"{TimeText(item)}, {item.Title}"
             + (rowMeta is null ? string.Empty : $", {rowMeta.Replace(" · ", ", ", StringComparison.Ordinal)}")
-            + (item.MeetingLink is null ? string.Empty : ", has video meeting"));
+            + (hasLink ? ", has video meeting" : string.Empty));
         AutomationProperties.SetHelpText(row, "Select to show event details");
 
         var content = new Grid { ColumnSpacing = 6 };
@@ -613,7 +1025,7 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(time, 2);
         content.Children.Add(time);
 
-        if (item.MeetingLink is not null)
+        if (hasLink)
         {
             // Non-interactive video glyph, neutral: accent is reserved for selection/today.
             var glyph = new FontIcon
@@ -701,7 +1113,8 @@ public sealed partial class MainWindow : Window
         _detailsCard = card;
         var index = AgendaPanel.Children.IndexOf(row);
         AgendaPanel.Children.Insert(index + 1, card);
-        DiagnosticLog.Write($"DETAILS open title='{item.Title}' index={index} actions='{ActionsText(item)}'");
+        DiagnosticLog.Write(
+            $"DETAILS open index={index} hasLink={MeetingLinks.IsUsable(item.MeetingLink)} hasLocation={!string.IsNullOrWhiteSpace(item.Location)} actions='{ActionsText(item)}'");
 
         ResizeToContent();
         DispatcherQueue.TryEnqueue(() =>
@@ -714,7 +1127,7 @@ public sealed partial class MainWindow : Window
     }
 
     private static string ActionsText(SpikeEvent item) =>
-        item.MeetingLink is { Length: > 0 }
+        MeetingLinks.IsUsable(item.MeetingLink)
             ? "Join meeting | Copy link | Close details"
             : "Close details";
 
@@ -783,8 +1196,9 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 10, 0, 0),
         };
 
-        if (item.MeetingLink is { Length: > 0 } link)
+        if (MeetingLinks.TryGetUsableUri(item.MeetingLink, out var meetingUri))
         {
+            var target = meetingUri.AbsoluteUri;
             var joinContent = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             joinContent.Children.Add(new FontIcon
             {
@@ -813,9 +1227,21 @@ public sealed partial class MainWindow : Window
             AutomationProperties.SetAutomationId(join, "JoinMeetingButton");
             join.Click += async (_, _) =>
             {
-                if (Uri.TryCreate(link, UriKind.Absolute, out var uri))
+                try
                 {
-                    await Launcher.LaunchUriAsync(uri);
+                    // AbsoluteUri, not the raw provider string: only http/https reached this
+                    // point and the canonical URI is what the shell should launch.
+                    var launched = await Launcher.LaunchUriAsync(new Uri(target));
+                    DiagnosticLog.Write($"JOIN result={(launched ? "ok" : "fail")}");
+                    if (!launched)
+                    {
+                        SetCopyStatus("Could not open the meeting link.", isError: true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Write("JOIN result=fail kind=" + ex.GetType().Name);
+                    SetCopyStatus("Could not open the meeting link.", isError: true);
                 }
             };
             _joinButton = join;
@@ -881,7 +1307,7 @@ public sealed partial class MainWindow : Window
         {
             AgendaPanel.Children.Remove(_detailsCard);
             _detailsCard = null;
-            DiagnosticLog.Write($"DETAILS close title='{_selectedEvent?.Title}'");
+            DiagnosticLog.Write($"DETAILS close hadEvent={_selectedEvent is not null}");
         }
 
         if (_selectedRow is not null)
@@ -913,7 +1339,7 @@ public sealed partial class MainWindow : Window
 
     private void CopySelectedLink()
     {
-        if (_selectedEvent?.MeetingLink is not { Length: > 0 } link)
+        if (_selectedEvent is null || !MeetingLinks.TryGetUsableUri(_selectedEvent.MeetingLink, out var uri))
         {
             return;
         }
@@ -921,14 +1347,17 @@ public sealed partial class MainWindow : Window
         try
         {
             var package = new DataPackage();
-            package.SetText(link);
+            package.SetText(uri.AbsoluteUri);
             Clipboard.SetContent(package);
-            DiagnosticLog.Write($"COPY result=ok text='{link}'");
+            // Flush publishes the data to the clipboard service now, so it survives this app
+            // exiting or the DataPackage being collected.
+            Clipboard.Flush();
+            DiagnosticLog.Write("COPY result=ok");
             SetCopyStatus("Meeting link copied.", isError: false);
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write("Copy failed: " + ex);
+            DiagnosticLog.Write("COPY result=fail kind=" + ex.GetType().Name);
             SetCopyStatus("Could not copy the meeting link.", isError: true);
         }
     }
@@ -983,20 +1412,38 @@ public sealed partial class MainWindow : Window
             {
                 CollapseDetails();
             }
+            else if (!_tray.IsIconVisible && !_tray.HotkeyRegistered)
+            {
+                // Hiding would leave no way back to an app with neither tray icon nor hotkey.
+                ExitApplication();
+            }
             else
             {
-                _hidden = true;
-                AppWindow.Hide();
+                HideFlyout();
             }
         };
         RootHost.KeyboardAccelerators.Add(escape);
+
+        // A known visible quit route, independent of the tray icon. It works whenever the
+        // flyout has keyboard focus, including the tray-unavailable fallback.
+        var quit = new KeyboardAccelerator
+        {
+            Key = VirtualKey.Q,
+            Modifiers = VirtualKeyModifiers.Control,
+        };
+        quit.Invoked += (_, args) =>
+        {
+            args.Handled = true;
+            ExitApplication();
+        };
+        RootHost.KeyboardAccelerators.Add(quit);
     }
 
     private void ApplyCaptureState()
     {
         var today = DateOnly.FromDateTime(DateTime.Today);
         var events = _events.TryGetValue(today, out var list) ? list : new List<SpikeEvent>();
-        var meeting = events.FirstOrDefault(e => e.MeetingLink is not null);
+        var meeting = events.FirstOrDefault(e => MeetingLinks.IsUsable(e.MeetingLink));
 
         switch (_captureState)
         {
@@ -1048,7 +1495,7 @@ public sealed partial class MainWindow : Window
 
                 if (events.Count > 0)
                 {
-                    DiagnosticLog.Write($"SWITCH from='{meeting?.Title}' to='{events[0].Title}'");
+                    DiagnosticLog.Write($"SWITCH fromIndex={(meeting is null ? -1 : events.IndexOf(meeting))} toIndex=0 count={events.Count}");
                     OpenDetailsFor(events[0]);
                 }
                 break;
@@ -1168,11 +1615,14 @@ public sealed partial class MainWindow : Window
 
         var root = RootGrid.XamlRoot;
         var element = root is null ? null : FocusManager.GetFocusedElement(root);
-        var name = element is DependencyObject dependencyObject
-            ? AutomationProperties.GetName(dependencyObject)
+        // Never log AutomationProperties.Name here: agenda row names contain the event title.
+        var automationId = element is DependencyObject dependencyObject
+            ? AutomationProperties.GetAutomationId(dependencyObject)
             : string.Empty;
+        var hasName = element is DependencyObject namedElement
+                      && !string.IsNullOrEmpty(AutomationProperties.GetName(namedElement));
         DiagnosticLog.Write(
-            $"FOCUS {kind} ok={ok} active={_windowActive} element={element?.GetType().Name ?? "null"} name='{name}'");
+            $"FOCUS {kind} ok={ok} active={_windowActive} element={element?.GetType().Name ?? "null"} id='{automationId}' hasName={hasName}");
     }
 
     /// <summary>
@@ -1213,7 +1663,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write("SCROLL failed: " + ex);
+            DiagnosticLog.Write("SCROLL failed kind=" + ex.GetType().Name);
         }
 
         var settle = DispatcherQueue.CreateTimer();
@@ -1246,7 +1696,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write("SCROLL log failed: " + ex);
+            DiagnosticLog.Write("SCROLL log failed kind=" + ex.GetType().Name);
         }
     }
 
@@ -1315,7 +1765,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLog.Write("LAYOUT failed: " + ex);
+            DiagnosticLog.Write("LAYOUT failed kind=" + ex.GetType().Name);
         }
     }
 
@@ -1336,6 +1786,16 @@ public sealed partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetCursorPos(out NativePoint point);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Rect

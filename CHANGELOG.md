@@ -34,6 +34,8 @@ the release workflow reads it to build the GitHub release notes.
 
 ### Changed
 
+- Hardened the standalone flyout: privacy-safe diagnostic logging (no event content/links; crash log under `%LOCALAPPDATA%\Calwren\logs`), http/https-only meeting links with normalized copy, tray/hotkey recovery, a quit path when the tray is unavailable, deferred light-dismiss toggle, tray/cursor-monitor positioning with DPI re-layout, single-instance activation, hidden taskbar startup and a Windows 10 2004 support floor; CI now verifies the self-contained runtime/PRI alias and smoke-launches the artifact.
+
 - Revised both compact-UI specs after the round-3 independent spec review. Spec 0003 was
   rescoped to the optional CmdPal surface: the impossible no-scroll criterion is deleted, the
   month budget is measured against the visible ContentPage viewport, Copy uses the normalized
@@ -70,6 +72,8 @@ the release workflow reads it to build the GitHub release notes.
   notes work for store events.
 
 ### Changed
+
+- Hardened the standalone flyout: privacy-safe diagnostic logging (no event content/links; crash log under `%LOCALAPPDATA%\Calwren\logs`), http/https-only meeting links with normalized copy, tray/hotkey recovery, a quit path when the tray is unavailable, deferred light-dismiss toggle, tray/cursor-monitor positioning with DPI re-layout, single-instance activation, hidden taskbar startup and a Windows 10 2004 support floor; CI now verifies the self-contained runtime/PRI alias and smoke-launches the artifact.
 
 - Automatic update checks are now opt-in (off by default), matching the privacy policy.
 - Development builds derive their package version from the newest release tag

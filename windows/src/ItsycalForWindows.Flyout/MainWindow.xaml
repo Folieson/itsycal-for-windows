@@ -25,6 +25,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <!-- Month header: title on the left, navigation on the right. All nav
@@ -134,6 +135,19 @@
                             <StackPanel x:Name="AgendaPanel" Spacing="4" />
                         </ScrollViewer>
                     </Grid>
+
+                    <!-- Visible only when the tray icon or the global hotkey could not be
+                         registered. It carries the known quit route (Ctrl+Q) so the flyout is
+                         never an invisible app with no way out. Collapsed normally. -->
+                    <TextBlock
+                        x:Name="SystemStatusText"
+                        Grid.Row="4"
+                        Margin="0,8,0,0"
+                        AutomationProperties.LiveSetting="Polite"
+                        FontSize="11"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
                 </Grid>
             </Border>
         </Grid>
