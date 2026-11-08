@@ -848,6 +848,116 @@ public sealed class UpdateLogicTests
         }
     }
 
+    [Fact]
+    public void BuildUpdaterScriptBytes_StartsWithUtf8Bom()
+    {
+        var bytes = UpdateService.BuildUpdaterScriptBytes(
+            @"C:\Users\tester\ItsycalForWindows\updates\v1.2.2\ItsycalForWindows_1.2.2.0_x64.msix",
+            @"C:\Users\tester\ItsycalForWindows\update.log",
+            "abc123");
+
+        Assert.True(bytes.Length > 3);
+        Assert.Equal(0xEF, bytes[0]);
+        Assert.Equal(0xBB, bytes[1]);
+        Assert.Equal(0xBF, bytes[2]);
+        var text = Encoding.UTF8.GetString(bytes[3..]);
+        Assert.Contains("verified sha256: abc123", text, StringComparison.Ordinal);
+        Assert.Contains("finally {", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildUpdaterScript_RestartsTheHostInsideFinally()
+    {
+        var script = UpdateService.BuildUpdaterScript(@"C:\temp\pkg.msix", @"C:\temp\update.log", "abc123");
+
+        var finallyIndex = script.IndexOf("finally {", StringComparison.Ordinal);
+        var restartIndex = script.IndexOf("Start-Process -FilePath ('shell:AppsFolder", StringComparison.Ordinal);
+        var exitIndex = script.IndexOf("if ($failed) { exit 1 }", StringComparison.Ordinal);
+
+        Assert.True(finallyIndex >= 0);
+        Assert.True(restartIndex > finallyIndex);
+        Assert.True(exitIndex > restartIndex);
+    }
+
+    [Fact]
+    public void VerifyPackageChecksumForApply_AcceptsMatchingPackage()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "itsycal-apply-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var msix = Path.Combine(folder, "ItsycalForWindows_1.2.2.0_x64.msix");
+            var bytes = Encoding.UTF8.GetBytes("apply-package-content");
+            File.WriteAllBytes(msix, bytes);
+            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            File.WriteAllText(
+                Path.Combine(folder, "SHA256SUMS.txt"),
+                hash + "  ItsycalForWindows_1.2.2.0_x64.msix" + Environment.NewLine);
+
+            var error = UpdateService.VerifyPackageChecksumForApply(msix, out var verified);
+
+            Assert.Null(error);
+            Assert.Equal(hash, verified);
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void VerifyPackageChecksumForApply_FailsClosedWhenChecksumMissing()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "itsycal-apply-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var msix = Path.Combine(folder, "ItsycalForWindows_1.2.2.0_x64.msix");
+            File.WriteAllBytes(msix, Encoding.UTF8.GetBytes("apply-package-content"));
+
+            var error = UpdateService.VerifyPackageChecksumForApply(msix, out _);
+
+            Assert.NotNull(error);
+            Assert.Contains("SHA256SUMS", error, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void VerifyPackageChecksumForApply_RejectsTamperedPackage()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "itsycal-apply-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var msix = Path.Combine(folder, "ItsycalForWindows_1.2.2.0_x64.msix");
+            File.WriteAllBytes(msix, Encoding.UTF8.GetBytes("tampered"));
+            File.WriteAllText(
+                Path.Combine(folder, "SHA256SUMS.txt"),
+                new string('0', 64) + "  ItsycalForWindows_1.2.2.0_x64.msix" + Environment.NewLine);
+
+            var error = UpdateService.VerifyPackageChecksumForApply(msix, out _);
+
+            Assert.NotNull(error);
+            Assert.Contains("SHA256 verification failed", error, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
     private static SemanticVersion Version(int major, int minor, int patch) => new(major, minor, patch);
 
     private static ReleaseAsset Asset(string name) =>
