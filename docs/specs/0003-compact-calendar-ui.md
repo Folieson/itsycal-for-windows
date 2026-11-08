@@ -114,4 +114,9 @@ the primary button in the expanded details (host cannot nest actions in a select
   indicator-vs-action distinction documented; AC set narrowed to layout/details/theme/states.
 - Design reviewer: required for the implementation PR (installed-build screenshots, dark/light,
   compact/expanded, host 800×480 and 640 DIP). Verdict recorded in the PR before code review.
+- Spec reviewer #2 (2026-11-08, re-review): request changes — AC-1 no-scrollbar conjunction
+  unachievable at the measured ContentPage viewport, measurement crop undefined, loading
+  fixture not deterministic; Copy/accent/link/roadmap contradictions. Revision in progress:
+  split compactness from long-content truncation, define numerator/denominator, deterministic
+  fixture, fix Copy/accent/labelling. Translucency added as AC-7 (host acrylic).
 - Code review: requested after the design verdict.
