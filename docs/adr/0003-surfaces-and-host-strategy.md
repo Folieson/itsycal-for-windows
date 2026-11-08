@@ -1,6 +1,8 @@
 # ADR 0003 — Surfaces: hybrid standalone flyout + Command Palette extension
 
 Status: accepted (PO decision 2026-11-08)
+Surface status (2026-11-08): primary = spec 0004 (draft, review pending); optional CmdPal
+surface = spec 0003 (revision 3, re-review pending, explicitly host-limited).
 Supersedes: nothing. Amends the surface plan in `docs/ROADMAP.md` and spec 0003.
 
 ## Context
@@ -31,7 +33,10 @@ WinUI 3 tray application as the primary compact UI.
    custom bottom dock.
 2. **Secondary surface:** keep the existing PowerToys Command Palette extension (calendar
    page, dock band, commands) as an optional integration for CmdPal users. It follows the
-   CmdPal host constraints; the compact UI spec does not force it beyond what the host allows.
+   CmdPal host constraints; its spec (0003) is explicitly scoped to what the host allows and
+   descopes criteria it cannot meet (narrow window, no-scroll long details, per-element UIA/
+   arrow focus) instead of claiming parity with the primary flyout. The compact, no-scroll
+   primary experience is owned by spec 0004.
 3. **Shared core:** extract calendar domain/providers/update/settings into a shared library
    (`ItsycalForWindows.Core`) used by both surfaces. No provider logic is duplicated. The
    Windows appointment store, ICS folder, update service and settings stay in the core.
@@ -49,7 +54,9 @@ accessibility; no PowerToys dependency for the core experience; CmdPal users kee
 
 Negative: two shells to build/test/release; standalone needs tray icon, hotkey, autostart,
 single-instance and multi-monitor handling, plus its own install/upgrade UX; the shared-core
-extraction is a real refactor with regression risk; two MSIX identities to sign/update.
+extraction is a real refactor with regression risk; two MSIX identities to sign/update. The
+optional CmdPal surface cannot match the primary flyout's compactness, so it is documented as
+host-limited rather than marketed as equivalent.
 
 Neutral: the existing palette extension, its tests and CI remain; the standalone app adds a
 new project/test target and a second artifact to the release.
@@ -61,8 +68,10 @@ new project/test target and a second artifact to the release.
    on an installed MSIX (screenshots) before production work.
 3. Extract `ItsycalForWindows.Core` incrementally behind tests; the CmdPal extension switches
    to the core first, then the standalone app consumes it.
-4. Build the standalone flyout UI (spec 0004) with design review; keep CmdPal UI unchanged
-   except shared-core compatibility.
+4. Build the standalone flyout UI (spec 0004) with design review. The optional CmdPal
+   compactness work in spec 0003 is not on the critical path: keep the extension working and
+   shared-core compatible, and implement 0003 only if the PO still wants that optional surface
+   polished.
 5. Package/sign/release both; update WinGet and README; changelog per surface.
 
 ## Alternatives considered
@@ -77,8 +86,9 @@ new project/test target and a second artifact to the release.
 
 ## References
 
-- Host limits: `docs/specs/0003-compact-calendar-ui.md` (CmdPal surface), PowerToys
+- Host limits: `docs/specs/0003-compact-calendar-ui.md` (optional CmdPal surface), PowerToys
   `MainWindow.xaml` (800×480/640×420) and `TransientSurface.xaml` (host acrylic).
+- Primary surface: `docs/specs/0004-standalone-compact-flyout.md` (WinUI 3 tray flyout).
 - Windows 11 widgets: https://learn.microsoft.com/en-us/samples/microsoft/windowsappsdk-samples/widgets/
 - WinUI 3 tray pattern: https://github.com/mehdimyadi/systemtraywinui3
 - PowerToys Dock band lifecycle: https://github.com/microsoft/PowerToys/pull/49739
