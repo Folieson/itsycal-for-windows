@@ -67,7 +67,7 @@ navigation are not exposed by this surface; they are tracked separately (see Out
 | AC-1 | Deterministic fixture: today + 3 events (one with meeting link, long title/location/notes, one without a link); installed build, 800×480/100%; dark + light screenshots; measure grid-height/card-height ratio from the PNG; assert no scrollbar | manual + screenshot |
 | AC-2 | Screenshots after prev month, day click and Today; week-number variant at 800 and 640 DIP | manual + screenshot |
 | AC-3 | Select two rows in turn: details move under the selected row, previous collapses, video glyph only on meeting rows, Join absent on the no-link event, Copy works | manual + screenshot |
-| AC-4 | Dark/light screenshots at 800×480 and 640 DIP; inspect clipping of time/title/Join/Copy labels | manual + screenshot |
+| AC-4 | Dark/light screenshots at 800×480 and 640 DIP; inspect clipping of time/title/Join/Copy labels and that the host acrylic is visible through the card (no opaque panel fill, readable contrast) | manual + screenshot |
 | AC-5 | Empty day and loading screenshots; no long onboarding text repeated on empty days | manual + screenshot |
 | AC-6 | Unit tests for truncation, grouping and action derivation in a pure layout helper | unit |
 
@@ -78,7 +78,9 @@ the primary button in the expanded details (host cannot nest actions in a select
 
 ## Out of scope
 
-- Custom window width / a 350-DIP popover (host feature request), two-month view.
+- Custom window width / a 350-DIP popover (host feature request), custom acrylic tint/opacity
+  (host-owned material; the extension can only avoid opaque fills and verify the rendered
+  result), two-month view.
 - Arrow-key day navigation and per-element UIA names (host surface does not expose them;
   track as a host feature request; deferred).
 - Source-status/all-sources-failed UI, Calendars settings/onboarding (ONB-101).

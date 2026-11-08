@@ -13,7 +13,7 @@ the release workflow reads it to build the GitHub release notes.
   `docs/specs/0003-compact-calendar-ui.md`).
 - Changelog discipline for releases.
 - Independent design-review gate for UI changes (installed-build screenshots, host-aware
-  compactness/typography/states).
+  compactness/typography/states, host acrylic translucency without opaque panels or fake alpha).
 
 ## [1.2.2] - 2026-11-08
 
