@@ -36,6 +36,7 @@ discipline is introduced at the same time (`CHANGELOG.md`, Keep a Changelog).
 | DOC-501 | P2 | Dock band screenshot + release evidence | Enable PowerToys Dock, capture dark/light/narrow, attach to README; release checklist. | Planned |
 | PRV-301 | P3 | Provider platform (Google/Graph/CalDAV) | OAuth/CalDAV, DPAPI tokens, per-provider settings; ADR 0002. Deferred until UI/onboarding are done. | Deferred |
 | LOC-601 | P3 | Localization (en-US/ru-RU) | `.resw` strings, culture date/time formats; README updated. | Deferred |
+| UI-104 | Done | Independent design-review gate | Read-only design reviewer judges installed-build screenshots against the accepted UI spec/reference after the tester and before code review; independence from author/tester/reviewers; verdict + screenshots recorded in the PR. | Added |
 | CHG-701 | Done | Changelog discipline | `CHANGELOG.md` with sections for every release; contributors update `[Unreleased]`; release workflow uses the section. | Changelog added; workflow integration next |
 
 ## Dependencies and constraints

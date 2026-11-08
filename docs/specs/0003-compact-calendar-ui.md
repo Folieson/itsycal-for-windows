@@ -94,4 +94,6 @@ the primary button in the expanded details (host cannot nest actions in a select
   composition-based compactness; a11y/keyboard/source-status moved out of scope; deterministic
   DEBUG/ICS fixture and measured screenshot evidence; explicit truncation and action rules;
   indicator-vs-action distinction documented; AC set narrowed to layout/details/theme/states.
-- Code review: requested on the implementation PR after this revision is accepted.
+- Design reviewer: required for the implementation PR (installed-build screenshots, dark/light,
+  compact/expanded, host 800×480 and 640 DIP). Verdict recorded in the PR before code review.
+- Code review: requested after the design verdict.
