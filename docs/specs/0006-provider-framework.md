@@ -3,7 +3,7 @@
 Status: proposed — revision 2 (2026-11-08). Revision 1 was reviewed independently and
 received "request changes" for the secret-at-rest design, the missing secret-delivery path,
 the transport policy and spec/ADR reconciliation. Revision 2 fixes those blocking findings
-and the majors; CI is green (run 42507363384, head `06fb047`: 414/414 tests, 52.7% total
+and the majors; CI is green (run 42508146440, head `074e30e`: 414/414 tests, 52.7% total
 coverage, Providers 87.70%/84.12%, ARM64 step 0/0). The ADR/backlog/evidence reconciliation is
 recorded below; a final independent spec re-review is pending and no approval is claimed
 until it completes.
@@ -184,7 +184,8 @@ tracked under PRV-308; it is not silently implied by this framework.
 - **Deferred wiring:** neither the Command Palette extension nor the standalone flyout
   references `ItsycalForWindows.Providers` yet. The unused app `ProjectReference` was
   removed (it only added the DLL to the MSIX payload with no code path), and the flyout was
-  never referenced. The composition/settings follow-up (PRV-306/PRV-308) adds
+  never referenced. The composition/settings follow-up (PRV-306; PRV-308 supplies the encrypted
+cache dependency) adds
   `ProviderEventSource` to the surfaces' composite; that is deliberately not claimed here.
 
 ### ARM64
@@ -200,7 +201,7 @@ dotnet build windows/src/ItsycalForWindows.Providers/ItsycalForWindows.Providers
 ```
 
 The ARM64 CI step (restore + build of the Providers project) **executed successfully** in the
-green CI run 42507363384 on head `06fb047` (0 warnings/0 errors); the local command above is
+green CI run 42508146440 on head `074e30e` (0 warnings/0 errors); the local command above is
 retained for reproducibility. No separate ARM64 test job exists yet.
 
 ## Acceptance criteria
@@ -267,9 +268,7 @@ retained for reproducibility. No separate ARM64 test job exists yet.
   private/link-local policy, and treats the user-supplied feed address as a secret trust
   boundary. In this framework slice event content is never written to disk; the accepted
   encrypted on-disk cache (ADR 0005 Q7, PRV-308) will store only encrypted records, never
-  plaintext. In this framework slice no event content is written to disk; the
-  accepted encrypted on-disk cache (ADR 0005 Q7, PRV-308) will store only encrypted records
-  and never plaintext.
+  plaintext.
 - [x] **AC-10 — integration:** a thin `IEventSource` adapter (`ProviderEventSource`) maps
   provider refresh results to Core `CalendarEvent`s with an offline test. UI/surface wiring
   is explicitly deferred and documented above; the app no longer carries an unused provider
@@ -278,7 +277,7 @@ retained for reproducibility. No separate ARM64 test job exists yet.
   and all new behavior is covered by offline unit tests; `windows/tests/coverlet.runsettings`
   includes `[ItsycalForWindows.Providers]*`; the coverage floor stays at 30%; the Windows CI
   job builds the provider library for ARM64. This spec maps each AC to tests and records that
-  revision 2 is **CI-green** (run 42507363384, head `06fb047`: 414/414 tests, total line
+  revision 2 is **CI-green** (run 42508146440, head `074e30e`: 414/414 tests, total line
   coverage 52.7%, Providers 87.70% line/84.12% branch, ARM64 step 0/0) and that an independent
   spec re-review is pending (revision 1 was request-changes; the previous blockers are
   resolved in the code). The earlier local 53.82%/88.08% numbers are historical; CI is
@@ -334,7 +333,7 @@ dotnet exec <xunit-console-2.9.3>/xunit.console.dll `
 #    (historical local run; CI is canonical: 52.7% total / Providers 87.70%/84.12%)
 ```
 
-CI is green for this revision (run 42507363384, head `06fb047`: 414/414 tests, line
+CI is green for this revision (run 42508146440, head `074e30e`: 414/414 tests, line
 coverage 52.7%, Providers 87.70%/84.12%, ARM64 step 0/0); the `dotnet test` job, coverage
 floor and ARM64 restore/build are the gates. No live provider, DNS, or network request is
 made by the tests.
@@ -376,7 +375,7 @@ made by the tests.
 | Item | Why deferred | Tracked as |
 |---|---|---|
 | Encrypted on-disk event cache (PO decision 2026-11-08) | Needs its own privacy/threat-model update, key management, retention/delete design; ADR 0005 Q7 records the decision | PRV-308 |
-| UI wiring: `ProviderEventSource` in the flyout/CmdPal composite, add-account/settings surface | No UI in this slice; surfaces do not reference the provider library yet | PRV-306 + PRV-308 |
+| UI wiring: `ProviderEventSource` in the flyout/CmdPal composite, add-account/settings surface | No UI in this slice; surfaces do not reference the provider library yet | PRV-306 (PRV-308 supplies the cache dependency) |
 | OAuth adapters (Google/Graph), CalDAV/Yandex transports, Credential Locker token storage | Separate transports and review scope | PRV-301/302/303/304/307 |
 | Background scheduling, backoff/jitter, `429 Retry-After` | Not required for the framework slice | PRV-308 |
 | Storage layout `settings.json`/`providers\` per ADR 0005 §4.2 | Kept the existing `accounts\` layout in this slice; ADR 0005 now records the amendment and PRV-306/PRV-307 own the migration | PRV-306/PRV-307 |
@@ -386,13 +385,17 @@ made by the tests.
 - Spec review round 1 (`187985d`): request changes — B1 tokenized URL at rest, B2 spec/ADR
   reconciliation, B3 missing secret delivery; majors on transport/cache/store/tests.
 - Revision 2 fixes B1–B3 and the code majors; CI run 42506197925 (code head `4cd4f18`) and
-  run 42507363384 (docs head `06fb047`) are green.
-- Spec review round 2: request changes for remaining ADR/backlog/evidence reconciliation
-  (ADR 0005 implementation status, deferral ownership, stale CI evidence) plus the ADR Q7
-  encrypted-cache propagation. Those are fixed in this revision: ADR 0005 records the
-  implementation amendment, Q7 encrypted cache and the affected sections/Store-gate
-  criterion; BACKLOG PRV-306/307/308 own the storage-layout/secret/encrypted-cache work;
-  the evidence now points at run 42507363384/head `06fb047`.
+  run 42508146440 (docs head `074e30e`) are green.
+- Spec review round 2 (2026-11-08): request changes — ADR 0005 implementation status,
+  deferral ownership, stale CI evidence, ADR Q7 encrypted-cache propagation.
+  Recorded in the PR comment review history.
+- Spec review round 3 (2026-11-08): request changes — BACKLOG still said "no event content on
+  disk"/encrypted cache out of v1 (contradicting Q7), UI-wiring ownership, PR template/checklist
+  and minor evidence/record items. Recorded in the PR comment review history.
+- Revision 2 fixes all of the above: ADR 0005 and BACKLOG now consistently require no
+  plaintext at rest and the PRV-308 encrypted cache; PRV-306 owns UI/composite wiring with
+  PRV-307/308 dependencies; the PR body follows the repository template; evidence points at
+  run 42508146440/head `074e30e`; this review section records rounds 1–3.
 - Code review of revision 2: **approve with notes** (no blocking code findings; major
   follow-ups on secret fingerprinting, corrupt-secret removal, in-flight invalidation and
   custom-handler redirects are deferred to PRV-301/304/306/307/308; PR comment posted).

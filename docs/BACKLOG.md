@@ -182,9 +182,9 @@ deferred in the ADR.
 - Microsoft Store submission is blocked until ADR 0005 §8 is met (the P0 provider rows,
   PRV-311 and REL-303). Trusted signing, the v2.0 package identity and WinGet may proceed
   only with the PO's decision on ADR 0005 Q5; no Store package is submitted early.
-- Provider v1 is read-only and opt-in per account: no write scopes, no telemetry, no event
-  content on disk or in logs, tokens per ADR 0005 §4.2. On-prem Exchange, write support and an
-  encrypted offline cache are out of v1 (ADR 0005 Q1/Q2/Q7).
+- Provider v1 is read-only and opt-in per account: no write scopes, no telemetry, no plaintext
+  event content on disk or in logs, tokens per ADR 0005 §4.2. On-prem Exchange, write support and an
+  encrypted on-disk cache is PRV-308, outside this framework slice (ADR 0005 Q7; plaintext at rest is never allowed).
 - Every user-visible change adds a `CHANGELOG.md` line under `[Unreleased]`; a release tag
   requires a matching `## [X.Y.Z]` section.
 - Rebranding is a package-identity change ([ADR 0004](adr/0004-rebrand-independent-product.md)):

@@ -9,7 +9,7 @@
   account metadata in `%LOCALAPPDATA%\ItsycalForWindows\accounts\accounts.json` and
   per-account DPAPI secrets in `secrets.dat` (ProtectedData `CurrentUser`, per-account
   entropy, quarantine/cross-process lock), not the `settings.json`/`providers\` layout or
-  Credential Locker assumed in §4.2/§4.6. The deviation is deliberate for the framework
+  Credential Locker assumed in §4.2. The deviation is deliberate for the framework
   slice and is tracked in [PRV-306/PRV-307](../BACKLOG.md); OAuth tokens remain a PRV-307
   target and no provider UI/surface is wired yet. The encrypted on-disk event cache is a
   PO decision (below, Q7) and remains the next slice (PRV-308), not part of this framework.
@@ -301,7 +301,7 @@ Standalone flyout app ──────┘        │                          
                                      ├─ CalDAV engine (Yandex/iCloud/Fastmail/Nextcloud/mailbox presets)
                                      ├─ ICS subscription source (HTTP conditional GET + IcsParser)
                                      ├─ Secrets (Credential Locker / DPAPI)
-                                     └─ Sync coordinator + in-memory event cache + status
+                                     └─ Sync coordinator + encrypted event cache (Q7) + status
 ```
 
 - **`IEventSource` stays the data contract.** Each account/calendar becomes an
