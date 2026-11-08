@@ -8,9 +8,11 @@ which is not part of this repository anymore.
 ## Layout
 
 - `windows/` — the Windows extension: C#/.NET 10, Command Palette dock band + calendar.
-- `windows/src/ItsycalForWindows/` — extension source (`Program.cs`, provider, `Models/`,
-  `Pages/`, `Services/`, package assets).
-- `windows/tests/` — unit tests for the pure logic (calendar grid, event ranges).
+- `windows/src/ItsycalForWindows.Core/` — shared calendar core: `Models/` and the event
+  providers (`IEventSource`, ICS, appointments, composite), with no UI or packaging.
+- `windows/src/ItsycalForWindows/` — Command Palette shell: `Program.cs`, commands provider,
+  `Pages/`, updater, settings and package assets.
+- `windows/tests/` — unit tests for the shared core and the update logic.
 - `windows/scripts/` — development tooling: `deploy-local.ps1` (MSIX dev install),
   `Build-Release.ps1` (signed release assets), `New-BrandAssets.ps1`.
 - `winget/` — WinGet manifests for the MSIX release (`InstallerType: msix`).
@@ -110,6 +112,12 @@ builds, packages and tests every PR.
 - Start every branch from a freshly fetched `master`: `git switch master && git pull --ff-only && git switch -c <type>/<slug>`. Never branch from another feature branch.
 - Before opening a PR, run `git diff master...HEAD --stat` and confirm it contains only this change. If another PR's commits appear, the branch is stacked: recreate it from `master` and cherry-pick only its own commits (`git rebase --onto master <other-branch> <your-branch>`), then re-verify.
 - Never stack branches.
+
+## Changelog
+
+Every user-visible change adds a line under `[Unreleased]` in `CHANGELOG.md` (Keep a
+Changelog format). A release tag requires a `## [X.Y.Z]` section; the release workflow fails
+without it and uses the section as the GitHub release "What's changed" body.
 
 ## Commits and PRs
 

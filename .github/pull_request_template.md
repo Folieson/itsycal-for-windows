@@ -39,4 +39,4 @@
 - [ ] No telemetry; network usage matches `docs/adr/0002-calendar-providers-and-network.md`; event content is not logged.
 - [ ] New NuGet packages are recorded in `windows/THIRD-PARTY-NOTICES.md`.
 - [ ] No `bin/`, `obj/`, `publish/`, certificates or packages in the diff.
-- [ ] README/ADR/spec updated when behaviour or a decision changed.
+- [ ] README/ADR/spec updated when behaviour or a decision changed; user-visible changes have a CHANGELOG [Unreleased] entry.

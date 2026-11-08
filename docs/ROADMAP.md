@@ -1,11 +1,11 @@
 # Roadmap
 
-Itsycal for Windows is a PowerToys Command Palette extension: an always-visible dock band
-with the date and a month flyout with read-only calendar events. This roadmap turns it from
-a single-source viewer into a dependable calendar surface for the palette, while respecting
-the constraints of the host (Adaptive Cards, host theme, host window size) and the privacy
-promise (no telemetry, calendar data stays on the device unless the user configures a
-provider that requires the network).
+Itsycal for Windows is moving to two surfaces (ADR 0003): a standalone WinUI 3 tray flyout
+with the compact calendar, and a PowerToys Command Palette extension with the dock band and a
+month flyout. This roadmap turns it from a single-source viewer into a dependable calendar
+surface for both, while respecting the Command Palette host constraints (Adaptive Cards, host
+theme, host window size) and the privacy promise (no telemetry, calendar data stays on the
+device unless the user configures a provider that requires the network).
 
 ## North star
 
@@ -26,7 +26,26 @@ provider that requires the network).
 | ICS provider | `%LOCALAPPDATA%\ItsycalForWindows\calendars\*.ics` files are parsed (RFC 5545 subset, basic recurrence) and merged with the Windows appointment store via a composite source. Any calendar app that can export `.ics` becomes a data source: Google Calendar, Outlook/M365, Exchange, Apple Calendar, CalDAV bridges. |
 | Dock band and settings | Dock subtitle shows the next event today (`13:00 Lunch`) instead of a bare count; update and calendar-source settings are reachable from the palette and documented. |
 
+### v1.2.3 — "compact, finished UI" (P0, PO decision 2026-11-08)
+
+Per ADR 0003 the primary compact UI moves to a standalone WinUI 3 tray flyout (~360 DIP,
+acrylic, hotkey): the month is only for quick date navigation; meeting rows show a video glyph
+indicator; the agenda below shows times/locations/inline details with a `Join meeting` button
+in the expanded details. The PowerToys Command Palette extension remains an optional secondary
+surface with its host constraints (it may scroll, including for an ordinary day, and cannot
+match the primary compactness). Renderer-supported keyboard (Today/prev/next, Enter on actions)
+is expected on both surfaces; per-element UIA names and arrow-key day focus are deferred on the
+CmdPal surface and are implemented in the primary flyout (spec 0004).
+Plan: [BACKLOG.md](BACKLOG.md). ADR: [0003](adr/0003-surfaces-and-host-strategy.md).
+Spec: [0004-standalone-compact-flyout.md](specs/0004-standalone-compact-flyout.md); optional
+CmdPal surface: [0003-compact-calendar-ui.md](specs/0003-compact-calendar-ui.md).
+Shared core: models and providers are already in `ItsycalForWindows.Core` (PR #39); `UpdateService`
+and settings extraction is the remaining ARCH-802 work. The feasibility spike on
+`feat/flyout-spike` is evidence only — packaging, tray lifecycle and the flyout-specific update
+path are proven by the implementation, not by the spike.
+
 ### v1.3 — "provider platform"
+
 
 | Feature | Acceptance |
 |---|---|
@@ -39,10 +58,12 @@ provider that requires the network).
 
 ### v1.4 — "modern, finished UI"
 
-- Richer flyout composition within Adaptive Cards 1.5: accent header band, grouped agenda,
-  all-day chips, event categories/colors, compact/comfortable density setting.
-- Light/dark parity check and screenshots for both themes; the host decides the theme, the
-  extension must look intentional in either.
+- Richer composition on the primary standalone flyout (the optional CmdPal surface stays
+  within Adaptive Cards 1.5): a restrained header band (accent remains reserved for
+  selection/today), grouped agenda, all-day chips, event categories/colors, and a
+  compact/comfortable density setting.
+- Light/dark parity check and screenshots for both surfaces; the standalone flyout follows the
+  Windows theme and the CmdPal host decides its own; the UI must look intentional in either.
 - Dock band options: compact date, next-event line, week-number style; per-user format
   preview in settings.
 - Localization: strings through resource files, at least en-US and ru-RU, with date/time
@@ -73,7 +94,7 @@ provider that requires the network).
 |---|---|
 | Windows appointment store has no maintained first-party provider | Local sources (ICS now, remote providers next) are first-class; the store stays a compatibility source. |
 | OAuth app registration/review delays and tenant admin consent for Exchange | Start with ICS/CalDAV that need no registration; document Graph scopes and add a graceful "not configured" state. |
-| Host rendering constraints (Adaptive Cards only) | Design within the verified 1.5 subset; keep the UI verification loop (install → screenshot → read image) mandatory for every visual change. |
+| Host rendering constraints on the optional CmdPal surface (Adaptive Cards only) | Design within the verified 1.5 subset for that surface; the primary flyout owns its renderer but the installed-build screenshot loop stays mandatory for every visual change. |
 | Network/privacy expectations | Network is opt-in per feature/provider, HTTPS only, no telemetry; tokens in DPAPI; documented in the privacy section. |
 | Update pipeline trust | MSIX must verify against SHA256SUMS and be signed by the repository certificate; Windows refuses untrusted packages. |
 | Signing certificate cost/time | Self-signed dev channel continues to work; trusted channel is a funding/procurement task tracked in `docs/SIGNING.md`. |
@@ -81,7 +102,7 @@ provider that requires the network).
 ## Sequenced backlog (next 10 tickets)
 
 1. Wire the composite source (store + ICS) and verify with a real exported calendar.
-2. Inline event details with join/copy-link and keyboard return path.
+2. Inline event details with `Join meeting`/`Copy link` and a keyboard return path.
 3. Update check command + settings page + optional auto-install.
 4. Settings page: sources list, update settings, folder open button.
 5. ICS provider: multiple files, timezone edge cases, recurring event cap.
