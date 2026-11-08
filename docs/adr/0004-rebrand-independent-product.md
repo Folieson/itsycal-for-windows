@@ -81,17 +81,18 @@ stable, trusted release.
 ### Chosen name and brand direction
 
 **Calwren** is a coined name: *Cal* from calendar, *wren* from the small, alert bird. The
-story is "small bird, clear day": a small, quiet tool that makes the day legible. The mark is
-a warm, calm, minimalist wren silhouette perched on a calendar row, where the bird's body or
-negative space doubles as a date cell, so the mark reads as bird and calendar in one gesture
-rather than as two adjacent symbols. The palette is a terracotta/amber accent on neutral ink
-and paper; the wordmark is lowercase `calwren`; the descriptor is
-`Calwren — calendar for Windows`. The full foundation is
-[docs/reference/brand-calwren.md](../reference/brand-calwren.md).
+story is "small bird, clear day": a small, quiet tool that makes the day legible. The final
+mark (PO-approved 2026-11-08, "Fluent Binding") is a warm wren perched on the ink binding bar
+of a paper calendar page; the page carries a 7-column grid and one terracotta rounded date
+cell under the bird's feet, so the calendar read is structural rather than two adjacent
+symbols. The palette is a terracotta/paper accent on neutral ink; the wordmark is lowercase
+`calwren`; the descriptor is `Calwren — calendar for Windows`. The full foundation is
+[docs/reference/brand-calwren.md](../reference/brand-calwren.md), and the approved production
+assets are under [`assets/branding/calwren/`](../../assets/branding/calwren/).
 
-Clearance, domains, GitHub/npm/NuGet/Store identifiers and the final icon/wordmark are not yet
-complete. Candidate artwork stays out of this repository, no image assets are committed, and
-no user-visible rename is implemented before the v2.0.0 identity migration.
+Clearance, domains, GitHub/npm/NuGet/Store identifiers are not yet complete. The icon/wordmark
+are approved; no user-visible rename or package-identity change is implemented before the
+v2.0.0 identity migration.
 
 ## Alternatives considered
 
