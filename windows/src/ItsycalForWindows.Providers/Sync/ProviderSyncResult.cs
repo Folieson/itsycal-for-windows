@@ -31,4 +31,9 @@ public sealed record ProviderSyncResult
 
     /// <summary>Number of disabled accounts skipped by the refresh.</summary>
     public int SkippedCount => Outcomes.Count(static outcome => outcome.Status == ProviderSyncStatus.Skipped);
+
+    /// <summary>Safe representation: counts only, never event content.</summary>
+    public override string ToString() =>
+        $"ProviderSyncResult {{ Outcomes = {Outcomes.Count}, Succeeded = {SucceededCount}, " +
+        $"Failed = {FailedCount}, Skipped = {SkippedCount}, EventCount = {Events.Count} }}";
 }

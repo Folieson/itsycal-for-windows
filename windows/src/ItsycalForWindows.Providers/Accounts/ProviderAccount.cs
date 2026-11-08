@@ -4,19 +4,22 @@ namespace ItsycalForWindows.Providers;
 
 /// <summary>
 /// One configured calendar account. This is the non-secret half of a provider configuration:
-/// credentials and tokens live in <see cref="IProviderSecretStore"/> and are never stored here.
+/// credentials, tokens and token-bearing feed addresses live in
+/// <see cref="IProviderSecretStore"/> and are never stored here.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <see cref="Id"/> is the stable key used by the account store, the secret store, the sync state
 /// and the cache. It must survive display-name and address edits; generate it once with
-/// <see cref="NewId"/> and never reuse it. <see cref="RemoteId"/> is the provider-specific address
-/// (calendar id, subscription URL or local <c>.ics</c> path), not a credential.
+/// <see cref="NewId"/> and never reuse it. <see cref="RemoteId"/> is display-safe provider
+/// metadata (a calendar id or, for an ICS subscription, only <c>scheme://host</c>): the full feed
+/// address, which can embed a token, is kept in <see cref="ProviderSecret.Resource"/>.
 /// </para>
 /// <para>
-/// The type intentionally has no token, password or authorization-header property. A record's
-/// generated <c>ToString</c> and the accounts JSON can therefore never expose secret material; the
-/// explicit <see cref="ToString"/> below is a second guard for logs.
+/// The type intentionally has no token, password or feed-address property. A record's generated
+/// <c>ToString</c> and the accounts JSON can therefore never expose secret material; the explicit
+/// <see cref="ToString"/> below is a second guard for logs and omits the display name, sign-in
+/// name and all URL paths.
 /// </para>
 /// </remarks>
 public sealed record ProviderAccount
@@ -35,13 +38,15 @@ public sealed record ProviderAccount
 
     /// <summary>
     /// Optional sign-in name or calendar owner. It is display metadata only and never a password.
+    /// It is not written by <see cref="ToString"/>.
     /// </summary>
     public string? AccountName { get; init; }
 
     /// <summary>
-    /// Provider-specific remote identifier: a calendar id, a CalDAV collection URL, an ICS
-    /// subscription URL or a local <c>.ics</c> path. Must not contain credentials; URLs with
-    /// embedded user-info are rejected by the ICS provider.
+    /// Display-safe provider-specific identifier: a calendar id, a CalDAV collection URL or, for
+    /// an ICS subscription, only <c>scheme://host[:port]</c> (or <see cref="IcsFeedAddress.LocalFileRemoteId"/>
+    /// for a local file). The complete ICS feed address, including any path token, is stored in
+    /// <see cref="ProviderSecret.Resource"/> and must never be persisted here.
     /// </summary>
     public string? RemoteId { get; init; }
 
@@ -72,6 +77,16 @@ public sealed record ProviderAccount
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
 
+        if (kind == ProviderKind.IcsSubscription &&
+            !string.IsNullOrWhiteSpace(remoteId) &&
+            !IcsFeedAddress.IsSafeRemoteId(remoteId))
+        {
+            throw new ArgumentException(
+                "An ICS account remote id must be the display-safe scheme and host only. " +
+                "Use CreateIcsSubscription to keep the full feed address as a provider secret.",
+                nameof(remoteId));
+        }
+
         return new ProviderAccount
         {
             Id = string.IsNullOrWhiteSpace(id) ? NewId() : id.Trim(),
@@ -84,22 +99,45 @@ public sealed record ProviderAccount
         };
     }
 
+    /// <summary>
+    /// Creates an ICS subscription account whose <see cref="RemoteId"/> is the display-safe origin
+    /// and whose full feed address is returned separately as a secret ready for
+    /// <see cref="IProviderSecretStore.Save"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException">The address is not an absolute HTTPS URL or local file.</exception>
+    public static (ProviderAccount Account, ProviderSecret Secret) CreateIcsSubscription(
+        string displayName,
+        string feedAddress,
+        string? id = null,
+        bool enabled = true,
+        DateTimeOffset? createdAt = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(feedAddress);
+
+        var account = Create(
+            ProviderKind.IcsSubscription,
+            displayName,
+            remoteId: IcsFeedAddress.ToRemoteId(feedAddress),
+            enabled: enabled,
+            id: id,
+            createdAt: createdAt);
+
+        return (account, IcsFeedAddress.CreateSecret(feedAddress));
+    }
+
     /// <summary>Returns a copy with a new <see cref="LastSyncAt"/> value.</summary>
     public ProviderAccount WithLastSync(DateTimeOffset lastSyncAt) =>
         this with { LastSyncAt = lastSyncAt.ToUniversalTime() };
 
     /// <summary>
-    /// Safe log representation. It names only the non-secret fields; there are no secret fields to
-    /// redact, which is the point of keeping credentials in <see cref="ProviderSecret"/>. An
-    /// http(s) <see cref="RemoteId"/> is reduced to scheme/host/path so a feed token in the query
-    /// string cannot end up in a log line.
+    /// Safe log representation. It names only the stable id, kind, enabled flag and display-safe
+    /// host; the display name, sign-in name and every URL path/query are omitted so a log line
+    /// cannot carry an email address or a feed token.
     /// </summary>
     public override string ToString() =>
-        $"ProviderAccount {{ Id = {Id}, Kind = {Kind}, DisplayName = {DisplayName}, " +
-        $"AccountName = {AccountName ?? "(none)"}, RemoteId = {SafeRemoteId}, " +
-        $"Enabled = {Enabled}, CreatedAt = {CreatedAt:O}, LastSyncAt = {LastSyncAt?.ToString("O") ?? "(never)"} }}";
+        $"ProviderAccount {{ Id = {Id}, Kind = {Kind}, Enabled = {Enabled}, Host = {SafeHost} }}";
 
-    private string SafeRemoteId
+    private string SafeHost
     {
         get
         {
@@ -108,10 +146,15 @@ public sealed record ProviderAccount
                 return "(none)";
             }
 
+            if (string.Equals(RemoteId.Trim(), IcsFeedAddress.LocalFileRemoteId, StringComparison.OrdinalIgnoreCase))
+            {
+                return "(local file)";
+            }
+
             return Uri.TryCreate(RemoteId, UriKind.Absolute, out var uri) &&
                 (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
-                ? $"{uri.Scheme}://{uri.Host}{uri.AbsolutePath}"
-                : RemoteId;
+                ? uri.Host
+                : "(not a URL)";
         }
     }
 }

@@ -52,6 +52,14 @@ jobs:
       - name: Restore
         run: dotnet restore windows/ItsycalForWindows.sln -p:Platform=x64
 
+      # The provider library is the only project in this slice that ships for ARM64; building it
+      # here keeps the ARM64 compile honest until the MSIX packaging job covers ARM64 too.
+      - name: Restore and build the provider library (Debug, ARM64)
+        shell: pwsh
+        run: |
+          dotnet restore windows/src/ItsycalForWindows.Providers/ItsycalForWindows.Providers.csproj -p:Platform=ARM64
+          dotnet build windows/src/ItsycalForWindows.Providers/ItsycalForWindows.Providers.csproj -c Debug -p:Platform=ARM64 --no-restore
+
       - name: Stamp a unique development package version
         shell: pwsh
         run: |

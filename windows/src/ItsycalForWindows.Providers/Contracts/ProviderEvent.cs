@@ -43,4 +43,12 @@ public sealed record ProviderEvent
 
     /// <summary>True when the event overlaps the half-open range.</summary>
     public bool IsInRange(ProviderEventRange range) => range.Contains(Event);
+
+    /// <summary>
+    /// Safe representation: event content (title, times, location, details) is never rendered so a
+    /// debugger or log line cannot expose calendar data. Only provider identifiers are shown.
+    /// </summary>
+    public override string ToString() =>
+        $"ProviderEvent {{ RemoteId = {RemoteId ?? "(none)"}, CalendarId = {CalendarId ?? "(none)"}, " +
+        $"Event = (content redacted) }}";
 }

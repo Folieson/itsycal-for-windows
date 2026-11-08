@@ -1,53 +1,64 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using ItsycalForWindows.Services;
 
 namespace ItsycalForWindows.Providers;
 
 /// <summary>
-/// Read-only ICS subscription provider for an HTTP(S) URL or a local <c>.ics</c> file.
+/// Read-only ICS subscription provider for an HTTPS URL or a local <c>.ics</c> file.
 /// </summary>
 /// <remarks>
 /// <para>
-/// HTTP fetches use conditional requests: the previous <c>ETag</c> and <c>Last-Modified</c> values
-/// are kept in memory per account and sent as <c>If-None-Match</c>/<c>If-Modified-Since</c>; a 304
-/// re-parses the last good body for the requested range and reports
-/// <see cref="ProviderEventResult.NotModified"/>. The body is capped by
-/// <see cref="ProviderHttpOptions.MaxResponseBytes"/>, the attempt by
-/// <see cref="ProviderHttpOptions.Timeout"/>, and redirects are followed manually up to
-/// <see cref="ProviderHttpOptions.MaxRedirects"/> so every hop is validated.
+/// The subscription address is secret material: it arrives through
+/// <see cref="ProviderRequest.Secret"/> (<see cref="ProviderSecret.Resource"/>) and never from
+/// <see cref="ProviderAccount.RemoteId"/>, so a token-bearing URL cannot leak from the account
+/// registry. The provider keeps the last good body and <c>ETag</c>/<c>Last-Modified</c> values in
+/// memory, keyed by account and a hash of the address; a different address invalidates the old
+/// entry and a 304 with no cached body is an explicit non-ready state rather than an empty
+/// "ready" result. <see cref="ProviderRequest.ForceRefresh"/> bypasses the validators and the
+/// cache.
 /// </para>
 /// <para>
-/// Security: only absolute <c>http</c>/<c>https</c> URLs are accepted; URLs with embedded
-/// user-info are rejected so credentials cannot enter a URL, a log or an error message. The feed
-/// address is user-configured, so private/loopback destinations are allowed for a local feed; the
-/// provider does not read arbitrary local paths beyond the configured <c>.ics</c> file. It never
-/// logs the URL, the feed body, event content or credentials. A malformed feed or a non-ICS
-/// response is an explicit <see cref="ProviderState.InvalidResponse"/> result with no events.
+/// Transport policy (ADR 0005): HTTPS only, no URL user-info, private/loopback hosts only with
+/// <see cref="ProviderHttpOptions.AllowPrivateHosts"/>, link-local/cloud-metadata ranges always
+/// blocked, at most three redirects validated hop by hop, one timeout budget for the whole
+/// attempt, and manual redirect handling. The provider wraps the supplied handler in an
+/// <see cref="HttpClient"/> with automatic redirects turned off for a built-in handler and fails
+/// closed if a custom handler redirects behind its back. The response body is capped by
+/// <see cref="ProviderHttpOptions.MaxResponseBytes"/>.
 /// </para>
 /// <para>
-/// The injected <see cref="HttpClient"/> should use a handler with automatic redirects disabled
-/// (<c>AllowAutoRedirect = false</c>) so this provider's redirect policy is authoritative; the
-/// tests use a fake handler. If the handler follows redirects itself, the final response is still
-/// parsed and capped, only the manual redirect count does not apply.
+/// Security: the provider never logs the URL, the feed body, event content or credentials, and
+/// never writes them to disk. A malformed feed or a non-ICS response is an explicit
+/// <see cref="ProviderState.InvalidResponse"/> result with no events.
 /// </para>
 /// </remarks>
-public sealed class IcsSubscriptionProvider : ICalendarProvider
+public sealed class IcsSubscriptionProvider : ICalendarProvider, IProviderCacheInvalidator, IDisposable
 {
-    /// <summary>Accept header sent to an HTTP(S) subscription.</summary>
+    /// <summary>Accept header sent to an HTTPS subscription.</summary>
     public const string AcceptHeader = "text/calendar, application/ics, text/plain;q=0.9, */*;q=0.1";
+
+    private const string TimeoutMessage = "The subscription timed out.";
+    private const string NoAddressMessage = "No calendar address is stored for this account.";
 
     private readonly HttpClient _httpClient;
     private readonly ProviderHttpOptions _options;
-    private readonly ConcurrentDictionary<string, CachedFeed> _feeds = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<FeedKey, CachedFeed> _feeds = new();
 
-    /// <summary>Creates the provider. <paramref name="httpClient"/> is owned by the caller.</summary>
-    public IcsSubscriptionProvider(HttpClient httpClient, ProviderHttpOptions? options = null)
+    /// <summary>
+    /// Creates the provider over an HTTP handler. The provider owns the <see cref="HttpClient"/> it
+    /// creates for that handler and turns automatic redirects off on a built-in handler, so this
+    /// provider's per-hop redirect validation is authoritative. A custom handler that redirects
+    /// internally is detected at runtime and fails closed.
+    /// </summary>
+    public IcsSubscriptionProvider(HttpMessageHandler handler, ProviderHttpOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(handler);
+        DisableAutomaticRedirects(handler);
 
-        _httpClient = httpClient;
+        _httpClient = new HttpClient(handler, disposeHandler: false);
         _options = (options ?? new ProviderHttpOptions()).Validate();
     }
 
@@ -59,65 +70,94 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider
 
     /// <inheritdoc />
     public Task<ProviderStatus> ProbeAsync(
-        ProviderAccount account,
+        ProviderRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (string.IsNullOrWhiteSpace(account.RemoteId))
+        if (!TryGetFeedAddress(request, out var address))
         {
-            return Task.FromResult(ProviderStatus.NotConfigured("No calendar address is configured."));
+            return Task.FromResult(ProviderStatus.NotConfigured(NoAddressMessage));
         }
 
-        if (TryResolveLocalPath(account.RemoteId, out var path))
+        if (IcsFeedAddress.TryResolveLocalPath(address, out var path))
         {
             return Task.FromResult(File.Exists(path)
                 ? ProviderStatus.Ready(ProviderCapabilities.ReadOnlyEvents)
                 : ProviderStatus.NotConfigured("The local calendar file was not found."));
         }
 
-        if (TryCreateHttpUri(account.RemoteId, out _))
+        if (!IcsFeedAddress.TryCreateHttpUri(address, out var uri))
         {
-            return Task.FromResult(ProviderStatus.Ready(
-                ProviderCapabilities.ReadOnlyEvents | ProviderCapabilities.IncrementalSync));
+            return Task.FromResult(ProviderStatus.NotConfigured(
+                "The calendar address is neither an HTTPS URL nor a local .ics file."));
         }
 
-        return Task.FromResult(ProviderStatus.NotConfigured(
-            "The calendar address is neither an http(s) URL nor a local .ics file."));
+        var validation = ProviderNetworkPolicy.ValidateSyntactic(uri, _options);
+        if (!validation.IsAllowed)
+        {
+            return Task.FromResult(ProviderStatus.NotConfigured(validation.Message));
+        }
+
+        // A probe does no DNS: a host name is validated again before the first request.
+        var warning = _options.AllowPrivateHosts
+            ? "Self-hosted feeds are enabled. Only add a calendar or server you trust."
+            : null;
+
+        return Task.FromResult(ProviderStatus.Ready(
+            ProviderCapabilities.ReadOnlyEvents | ProviderCapabilities.IncrementalSync,
+            warning));
     }
 
     /// <inheritdoc />
     public async Task<ProviderEventResult> GetEventsAsync(
-        ProviderAccount account,
-        ProviderEventRange range,
+        ProviderRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (string.IsNullOrWhiteSpace(account.RemoteId))
+        if (!TryGetFeedAddress(request, out var address))
         {
-            return ProviderEventResult.Empty(ProviderStatus.NotConfigured("No calendar address is configured."));
+            return ProviderEventResult.Empty(ProviderStatus.NotConfigured(NoAddressMessage));
         }
 
-        if (range.IsEmpty)
+        if (request.Range.IsEmpty)
         {
-            return ProviderEventResult.Ready([]);
+            return ProviderEventResult.Empty(ProviderStatus.Ready(message: "The requested range is empty."));
         }
 
-        if (TryResolveLocalPath(account.RemoteId, out var path))
+        if (IcsFeedAddress.TryResolveLocalPath(address, out var localPath))
         {
-            return ReadLocalFeed(path, range, cancellationToken);
+            return ReadLocalFeed(localPath, request.Range, cancellationToken);
         }
 
-        if (TryCreateHttpUri(account.RemoteId, out var uri))
+        if (!IcsFeedAddress.TryCreateHttpUri(address, out var uri))
         {
-            return await FetchHttpFeedAsync(account, uri, range, cancellationToken).ConfigureAwait(false);
+            return ProviderEventResult.Empty(ProviderStatus.NotConfigured(
+                "The calendar address is neither an HTTPS URL nor a local .ics file."));
         }
 
-        return ProviderEventResult.Empty(ProviderStatus.NotConfigured(
-            "The calendar address is neither an http(s) URL nor a local .ics file."));
+        return await FetchHttpFeedAsync(request, uri, address, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public void InvalidateCache(string accountId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+
+        foreach (var key in _feeds.Keys.Where(key => key.AccountId == accountId).ToArray())
+        {
+            _feeds.TryRemove(key, out _);
+        }
+    }
+
+    /// <summary>Disposes the <see cref="HttpClient"/> this provider created; the handler stays owned by the caller.</summary>
+    public void Dispose()
+    {
+        _httpClient.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private ProviderEventResult ReadLocalFeed(
@@ -163,7 +203,7 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider
 
             return ParseFeed(Decode(memory.ToArray()), range, notModified: false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
@@ -175,69 +215,107 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider
     }
 
     private async Task<ProviderEventResult> FetchHttpFeedAsync(
-        ProviderAccount account,
+        ProviderRequest request,
         Uri initialUri,
-        ProviderEventRange range,
+        string address,
         CancellationToken cancellationToken)
     {
+        var feedKey = new FeedKey(request.Account.Id, HashAddress(address));
         var uri = initialUri;
+        var redirectCount = 0;
 
-        for (var redirectCount = 0; ; redirectCount++)
+        // One budget for every redirect hop and the body read, so a chain of slow hops cannot
+        // exceed the documented attempt timeout.
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(_options.Timeout);
+
+        while (true)
         {
-            if (!TryCreateHttpUri(uri.AbsoluteUri, out var requestUri))
+            ProviderUrlValidation validation;
+            try
             {
-                return ProviderEventResult.Empty(ProviderStatus.NotConfigured(
-                    "The calendar address is not a valid http(s) URL."));
+                validation = await ProviderNetworkPolicy
+                    .ValidateAsync(uri, _options, budget.Token)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                return ProviderEventResult.Empty(ProviderStatus.Unavailable(TimeoutMessage));
             }
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-            request.Headers.Accept.ParseAdd(AcceptHeader);
-            request.Headers.UserAgent.ParseAdd(_options.UserAgent);
+            if (!validation.IsAllowed)
+            {
+                return ProviderEventResult.Empty(new ProviderStatus(
+                    validation.State,
+                    ProviderCapabilities.None,
+                    validation.Message));
+            }
 
-            if (redirectCount == 0 && _feeds.TryGetValue(account.Id, out var cachedFeed))
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Get, uri);
+            httpRequest.Headers.Accept.ParseAdd(AcceptHeader);
+            httpRequest.Headers.UserAgent.ParseAdd(_options.UserAgent);
+
+            if (redirectCount == 0 &&
+                !request.ForceRefresh &&
+                _feeds.TryGetValue(feedKey, out var cachedFeed))
             {
                 if (!string.IsNullOrEmpty(cachedFeed.ETag))
                 {
-                    request.Headers.TryAddWithoutValidation("If-None-Match", cachedFeed.ETag);
+                    httpRequest.Headers.TryAddWithoutValidation("If-None-Match", cachedFeed.ETag);
                 }
 
                 if (cachedFeed.LastModified is { } lastModified)
                 {
-                    request.Headers.IfModifiedSince = lastModified;
+                    httpRequest.Headers.IfModifiedSince = lastModified;
                 }
             }
-
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(_options.Timeout);
 
             HttpResponseMessage response;
             try
             {
                 response = await _httpClient
-                    .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token)
+                    .SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, budget.Token)
                     .ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                return ProviderEventResult.Empty(ProviderStatus.Unavailable("The subscription timed out."));
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                return ProviderEventResult.Empty(ProviderStatus.Unavailable(TimeoutMessage));
             }
             catch (HttpRequestException)
             {
-                return ProviderEventResult.Empty(ProviderStatus.Unavailable("The subscription could not be reached."));
+                return ProviderEventResult.Empty(
+                    ProviderStatus.Unavailable("The subscription could not be reached."));
             }
 
             using (response)
             {
+                if (WasAutomaticallyRedirected(response, uri))
+                {
+                    return ProviderEventResult.Empty(ProviderStatus.InvalidResponse(
+                        "The HTTP handler followed a redirect automatically; every redirect hop must be validated."));
+                }
+
                 var statusCode = (int)response.StatusCode;
 
                 if (statusCode == 304)
                 {
-                    if (_feeds.TryGetValue(account.Id, out var cached) && cached.Text.Length > 0)
+                    if (!request.ForceRefresh &&
+                        _feeds.TryGetValue(feedKey, out var cached) &&
+                        cached.Text.Length > 0)
                     {
-                        return ParseFeed(cached.Text, range, notModified: true);
+                        return ParseFeed(cached.Text, request.Range, notModified: true);
                     }
 
-                    return ProviderEventResult.Ready([]);
+                    return ProviderEventResult.Empty(ProviderStatus.InvalidResponse(
+                        "The subscription reported 'not modified' but no cached copy is available."));
                 }
 
                 if (statusCode is >= 300 and < 400)
@@ -258,7 +336,7 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider
                     Uri next;
                     try
                     {
-                        next = location.IsAbsoluteUri ? location : new Uri(requestUri, location);
+                        next = location.IsAbsoluteUri ? location : new Uri(uri, location);
                     }
                     catch (UriFormatException)
                     {
@@ -266,13 +344,16 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider
                             ProviderStatus.InvalidResponse("The subscription redirected to an invalid address."));
                     }
 
-                    if (!TryCreateHttpUri(next.AbsoluteUri, out _))
+                    // The full network policy (scheme, credentials, DNS and blocked ranges) is
+                    // re-applied at the top of the loop for every hop.
+                    if (next.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(next.UserInfo))
                     {
                         return ProviderEventResult.Empty(
                             ProviderStatus.InvalidResponse("The subscription redirected to an unsupported address."));
                     }
 
                     uri = next;
+                    redirectCount++;
                     continue;
                 }
 
@@ -293,12 +374,19 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider
                 byte[]? bytes;
                 try
                 {
-                    bytes = await ReadAtMostAsync(response.Content, _options.MaxResponseBytes, timeout.Token)
+                    bytes = await ReadAtMostAsync(response.Content, _options.MaxResponseBytes, budget.Token)
                         .ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
-                    return ProviderEventResult.Empty(ProviderStatus.Unavailable("The subscription timed out."));
+                    // A caller cancellation must not be converted into an "unavailable" status by
+                    // the general handler below. This guard is what keeps the contract honest
+                    // while a response body is streaming.
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    return ProviderEventResult.Empty(ProviderStatus.Unavailable(TimeoutMessage));
                 }
 #pragma warning disable CA1031 // Any body-read failure is an explicit unavailable state.
                 catch (Exception)
@@ -319,13 +407,26 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider
                         ProviderStatus.InvalidResponse("The subscription is not an iCalendar feed."));
                 }
 
-                _feeds[account.Id] = new CachedFeed(
+                RememberFeed(feedKey, new CachedFeed(
                     text,
                     response.Headers.ETag?.ToString(),
-                    response.Content.Headers.LastModified);
+                    response.Content.Headers.LastModified));
 
-                return ParseFeed(text, range, notModified: false);
+                return ParseFeed(text, request.Range, notModified: false);
             }
+        }
+    }
+
+    private void RememberFeed(FeedKey feedKey, CachedFeed feed)
+    {
+        _feeds[feedKey] = feed;
+
+        // A changed address must not keep serving the previous feed's validators or body.
+        foreach (var stale in _feeds.Keys
+            .Where(key => key.AccountId == feedKey.AccountId && key != feedKey)
+            .ToArray())
+        {
+            _feeds.TryRemove(stale, out _);
         }
     }
 
@@ -387,78 +488,36 @@ public sealed class IcsSubscriptionProvider : ICalendarProvider
         return trimmed.StartsWith("BEGIN:VCALENDAR", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool TryResolveLocalPath(string value, out string path)
+    private static bool TryGetFeedAddress(ProviderRequest request, out string address)
     {
-        path = string.Empty;
-
-#pragma warning disable CA1031 // Any malformed path is simply "not a local feed".
-        try
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return false;
-            }
-
-            if (File.Exists(value))
-            {
-                path = Path.GetFullPath(value);
-                return true;
-            }
-
-            if (Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.IsFile)
-            {
-                if (!string.IsNullOrEmpty(uri.UserInfo))
-                {
-                    return false;
-                }
-
-                path = uri.LocalPath;
-                return !string.IsNullOrWhiteSpace(path);
-            }
-
-            if (Path.IsPathFullyQualified(value) &&
-                value.EndsWith(".ics", StringComparison.OrdinalIgnoreCase))
-            {
-                path = Path.GetFullPath(value);
-                return true;
-            }
-        }
-        catch (Exception)
-        {
-            // Not a usable local path.
-        }
-#pragma warning restore CA1031
-
-        return false;
+        address = request.Secret?.Resource?.Trim() ?? string.Empty;
+        return address.Length > 0;
     }
 
-    private static bool TryCreateHttpUri(string value, out Uri uri)
+    private static string HashAddress(string address) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(address)));
+
+    private static bool WasAutomaticallyRedirected(HttpResponseMessage response, Uri requestedUri)
     {
-        uri = null!;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out var candidate))
-        {
-            return false;
-        }
-
-        if (candidate.Scheme != Uri.UriSchemeHttps && candidate.Scheme != Uri.UriSchemeHttp)
-        {
-            return false;
-        }
-
-        // No credentials in URLs: they would leak through logs, errors and redirects.
-        if (!string.IsNullOrEmpty(candidate.UserInfo))
-        {
-            return false;
-        }
-
-        uri = candidate;
-        return true;
+        var actual = response.RequestMessage?.RequestUri;
+        return actual is not null &&
+            !string.Equals(actual.AbsoluteUri, requestedUri.AbsoluteUri, StringComparison.Ordinal);
     }
+
+    private static void DisableAutomaticRedirects(HttpMessageHandler handler)
+    {
+        switch (handler)
+        {
+            case HttpClientHandler httpClientHandler:
+                httpClientHandler.AllowAutoRedirect = false;
+                break;
+            case SocketsHttpHandler socketsHttpHandler:
+                socketsHttpHandler.AllowAutoRedirect = false;
+                break;
+        }
+    }
+
+    private readonly record struct FeedKey(string AccountId, string AddressHash);
 
     private sealed record CachedFeed(string Text, string? ETag, DateTimeOffset? LastModified);
 }

@@ -45,4 +45,9 @@ public sealed record ProviderSyncOutcome
 
     /// <summary>True when the outcome carries fresh or cached events.</summary>
     public bool IsSuccess => Status is ProviderSyncStatus.Succeeded or ProviderSyncStatus.Cached;
+
+    /// <summary>Safe representation: event counts only, never event content or the resolved secret.</summary>
+    public override string ToString() =>
+        $"ProviderSyncOutcome {{ Account = {Account}, Status = {Status}, EventCount = {Events.Count}, " +
+        $"LastSuccessAt = {LastSuccessAt?.ToString("O") ?? "(never)"}, Error = {Error ?? "(none)"} }}";
 }

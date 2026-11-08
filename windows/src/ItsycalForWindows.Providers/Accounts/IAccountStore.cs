@@ -5,10 +5,12 @@ namespace ItsycalForWindows.Providers;
 /// surface.
 /// </summary>
 /// <remarks>
-/// Implementations must be safe for the small concurrent use of the settings page and a refresh:
-/// calls are short file operations and the shipped <see cref="DpapiAccountStore"/> serializes them
-/// under one lock. A missing, corrupt or truncated store reads as an empty list instead of
-/// throwing; a write failure is reported to the caller.
+/// Implementations must be safe for the small concurrent use of the settings page and a refresh,
+/// including a second surface process: the shipped <see cref="DpapiAccountStore"/> serializes every
+/// operation with an in-process lock and a cross-process named mutex. A missing, corrupt or
+/// truncated store reads as an empty list instead of throwing; a write failure is reported to the
+/// caller. The shipped store also moves an unreadable file aside before overwriting it, so a
+/// corrupt store cannot silently destroy every account.
 /// </remarks>
 public interface IAccountStore
 {
@@ -21,11 +23,14 @@ public interface IAccountStore
     /// <summary>
     /// Adds a new account. The store assigns <see cref="ProviderAccount.CreatedAt"/> when it is
     /// <c>default</c> and normalizes display metadata. Throws <see cref="ArgumentException"/> for
-    /// an invalid id/kind and <see cref="InvalidOperationException"/> for a duplicate id.
+    /// an invalid id/kind or a remote id that would persist credentials/tokenized feed addresses,
+    /// and <see cref="InvalidOperationException"/> for a duplicate id.
     /// </summary>
     ProviderAccount Add(ProviderAccount account);
 
-    /// <summary>Removes an account and its secrets; false when the account does not exist.</summary>
+    /// <summary>
+    /// Removes an account and its secrets, secret first; false when the account does not exist.
+    /// </summary>
     bool Remove(string accountId);
 
     /// <summary>Enables or disables an account; false when the account does not exist.</summary>
@@ -33,7 +38,8 @@ public interface IAccountStore
 
     /// <summary>
     /// Records a successful sync instant; false when the account does not exist. Called by
-    /// <see cref="ProviderSyncService"/> after a provider returned events.
+    /// <see cref="ProviderSyncService"/> after a provider returned events, never for a skipped,
+    /// cached or failed attempt.
     /// </summary>
     bool MarkSynced(string accountId, DateTimeOffset lastSyncAt);
 }

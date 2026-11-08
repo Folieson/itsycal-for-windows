@@ -9,7 +9,7 @@ namespace ItsycalForWindows.Providers;
 /// <see cref="ProviderState.NotImplemented"/> answer instead of returning fabricated events or
 /// throwing. <see cref="GetEventsAsync"/> never performs I/O and always returns an empty,
 /// non-ready result. The real OAuth (PKCE, loopback redirect, DPAPI token refresh) and CalDAV
-/// transports are the next slice; see spec 0006 and ADR 0002.
+/// transports are the next slice; see spec 0006 and ADR 0005.
 /// </remarks>
 public abstract class NotImplementedCalendarProvider : ICalendarProvider
 {
@@ -28,14 +28,16 @@ public abstract class NotImplementedCalendarProvider : ICalendarProvider
 
     /// <inheritdoc />
     public Task<ProviderStatus> ProbeAsync(
-        ProviderAccount account,
+        ProviderRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var account = request.Account;
         var configured = !string.IsNullOrWhiteSpace(account.RemoteId) ||
-            !string.IsNullOrWhiteSpace(account.AccountName);
+            !string.IsNullOrWhiteSpace(account.AccountName) ||
+            request.Secret is { IsEmpty: false };
 
         return Task.FromResult(configured
             ? ProviderStatus.NotImplemented(NotImplementedMessage)
@@ -44,11 +46,10 @@ public abstract class NotImplementedCalendarProvider : ICalendarProvider
 
     /// <inheritdoc />
     public Task<ProviderEventResult> GetEventsAsync(
-        ProviderAccount account,
-        ProviderEventRange range,
+        ProviderRequest request,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
         return Task.FromResult(ProviderEventResult.Empty(ProviderStatus.NotImplemented(NotImplementedMessage)));

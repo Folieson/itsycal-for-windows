@@ -8,16 +8,17 @@ namespace ItsycalForWindows.Providers;
 /// The skeleton providers are registered on purpose. An account of a kind that is not registered
 /// would look like a programming error; returning an explicit "not implemented" status from a
 /// registered skeleton keeps the settings surface honest and lets the OAuth work land later without
-/// changing the sync service.
+/// changing the sync service. The handler is owned by the caller; the ICS provider owns only the
+/// <see cref="System.Net.Http.HttpClient"/> it wraps around it.
 /// </remarks>
 public static class ProviderCatalog
 {
-    /// <summary>Creates the default factories. <paramref name="httpClient"/> is owned by the caller.</summary>
+    /// <summary>Creates the default factories. <paramref name="handler"/> is owned by the caller.</summary>
     public static IReadOnlyList<IProviderFactory> CreateFactories(
-        HttpClient httpClient,
+        HttpMessageHandler handler,
         ProviderHttpOptions? httpOptions = null)
     {
-        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(handler);
 
         var options = httpOptions ?? new ProviderHttpOptions();
         return
@@ -28,13 +29,13 @@ public static class ProviderCatalog
             new DelegateProviderFactory(ProviderKind.GenericCalDav, static () => new GenericCalDavProvider()),
             new DelegateProviderFactory(
                 ProviderKind.IcsSubscription,
-                () => new IcsSubscriptionProvider(httpClient, options)),
+                () => new IcsSubscriptionProvider(handler, options)),
         ];
     }
 
     /// <summary>Creates a registry with every provider this build ships.</summary>
     public static ProviderRegistry CreateRegistry(
-        HttpClient httpClient,
+        HttpMessageHandler handler,
         ProviderHttpOptions? httpOptions = null) =>
-        new(CreateFactories(httpClient, httpOptions));
+        new(CreateFactories(handler, httpOptions));
 }

@@ -1,11 +1,13 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using ItsycalForWindows.Models;
 
 namespace ItsycalForWindows.Providers;
 
 /// <summary>
 /// Refreshes provider accounts one range at a time with explicit per-account state, error
-/// isolation, cancellation and optional caching.
+/// isolation, cancellation, secret delivery and optional caching.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,26 +17,37 @@ namespace ItsycalForWindows.Providers;
 /// a provider-internal timeout is reported as a failed outcome instead.
 /// </para>
 /// <para>
-/// A per-account gate makes duplicate refreshes cheap and deterministic: when a sync for the same
-/// account is already running, the second call returns
+/// The service resolves each account's secret from <see cref="IProviderSecretStore"/> and passes it
+/// to the provider through <see cref="ProviderRequest"/>; providers never read the store
+/// themselves. A per-account gate makes duplicate refreshes cheap and deterministic: when a sync
+/// for the same account is already running, the second call returns
 /// <see cref="ProviderSyncStatus.AlreadyRunning"/> instead of queueing another network request.
+/// </para>
+/// <para>
 /// The service updates <see cref="IAccountStore.MarkSynced"/> only after a successful provider
-/// fetch, never after a cached or failed one.
+/// fetch, never after a cached, skipped or failed one. An empty range is reported as
+/// <see cref="ProviderSyncStatus.Skipped"/> and does not touch the last-sync timestamp. Account
+/// metadata changes (enable/disable or a new remote address/token) invalidate the event cache and
+/// the provider's own validators; <see cref="InvalidateAccount"/> does the same explicitly for a
+/// disable/remove performed elsewhere.
 /// </para>
 /// </remarks>
 public sealed class ProviderSyncService
 {
     private readonly IAccountStore _accountStore;
     private readonly ProviderRegistry _registry;
+    private readonly IProviderSecretStore? _secretStore;
     private readonly IProviderCache? _cache;
     private readonly TimeProvider _timeProvider;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _gates = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, ProviderSyncState> _states = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, AccountFingerprint> _fingerprints = new(StringComparer.Ordinal);
 
-    /// <summary>Creates the service. <paramref name="cache"/> is optional.</summary>
+    /// <summary>Creates the service. The secret store and cache are optional.</summary>
     public ProviderSyncService(
         IAccountStore accountStore,
         ProviderRegistry registry,
+        IProviderSecretStore? secretStore = null,
         IProviderCache? cache = null,
         TimeProvider? timeProvider = null)
     {
@@ -43,6 +56,7 @@ public sealed class ProviderSyncService
 
         _accountStore = accountStore;
         _registry = registry;
+        _secretStore = secretStore;
         _cache = cache;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
@@ -59,11 +73,51 @@ public sealed class ProviderSyncService
     }
 
     /// <summary>
+    /// Forgets every cached event and provider validator for <paramref name="accountId"/>. Call
+    /// this after disabling or removing an account so a disabled provider cannot keep serving
+    /// cached content.
+    /// </summary>
+    public void InvalidateAccount(string accountId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+
+        _fingerprints.TryRemove(accountId, out _);
+        _cache?.Invalidate(accountId);
+
+        var account = _accountStore.Find(accountId);
+        if (account is not null)
+        {
+            InvalidateProviderCache(account);
+            return;
+        }
+
+        // The account may have been removed already; every provider is asked to drop the id.
+        foreach (var kind in _registry.Kinds)
+        {
+            if (_registry.TryGet(kind, out var provider) && provider is IProviderCacheInvalidator invalidator)
+            {
+                invalidator.InvalidateCache(accountId);
+            }
+        }
+    }
+
+    /// <summary>
     /// Refreshes every account in the store. Disabled accounts are skipped; failures are isolated
     /// per account. Cancellation propagates after the current account finishes.
     /// </summary>
+    public Task<ProviderSyncResult> RefreshAsync(
+        ProviderEventRange range,
+        CancellationToken cancellationToken = default) =>
+        RefreshAsync(range, forceRefresh: false, cancellationToken);
+
+    /// <summary>
+    /// Refreshes every account in the store. When <paramref name="forceRefresh"/> is true the
+    /// in-memory event cache and every provider validator cache are bypassed, so a manual
+    /// "refresh now" is never defeated by a cache hit.
+    /// </summary>
     public async Task<ProviderSyncResult> RefreshAsync(
         ProviderEventRange range,
+        bool forceRefresh,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -74,7 +128,7 @@ public sealed class ProviderSyncService
         foreach (var account in accounts)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            outcomes.Add(await SyncAccountAsync(account, range, cancellationToken).ConfigureAwait(false));
+            outcomes.Add(await SyncAccountAsync(account, range, forceRefresh, cancellationToken).ConfigureAwait(false));
         }
 
         return new ProviderSyncResult(outcomes);
@@ -85,9 +139,20 @@ public sealed class ProviderSyncService
     /// cancellation propagates. A concurrent call for the same account returns
     /// <see cref="ProviderSyncStatus.AlreadyRunning"/>.
     /// </summary>
+    public Task<ProviderSyncOutcome> SyncAccountAsync(
+        ProviderAccount account,
+        ProviderEventRange range,
+        CancellationToken cancellationToken = default) =>
+        SyncAccountAsync(account, range, forceRefresh: false, cancellationToken);
+
+    /// <summary>
+    /// Refreshes one account. <paramref name="forceRefresh"/> bypasses both the event cache and
+    /// the provider's own conditional-request cache.
+    /// </summary>
     public async Task<ProviderSyncOutcome> SyncAccountAsync(
         ProviderAccount account,
         ProviderEventRange range,
+        bool forceRefresh,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(account);
@@ -105,7 +170,7 @@ public sealed class ProviderSyncService
 
         try
         {
-            return await SyncCoreAsync(account, range, cancellationToken).ConfigureAwait(false);
+            return await SyncCoreAsync(account, range, forceRefresh, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -130,27 +195,37 @@ public sealed class ProviderSyncService
     private async Task<ProviderSyncOutcome> SyncCoreAsync(
         ProviderAccount account,
         ProviderEventRange range,
+        bool forceRefresh,
         CancellationToken cancellationToken)
     {
         if (!account.Enabled)
         {
-            return new ProviderSyncOutcome(
-                account,
-                ProviderSyncStatus.Skipped,
-                ProviderStatus.NotConfigured("The account is disabled."),
-                lastSuccessAt: LastSuccessFor(account));
+            InvalidateCaches(account);
+            return RecordSkipped(account, ProviderStatus.NotConfigured("The account is disabled."));
         }
 
         if (range.IsEmpty)
         {
-            return RecordSuccess(
-                account,
-                ProviderStatus.Ready(),
-                [],
-                _timeProvider.GetUtcNow());
+            return RecordSkipped(account, ProviderStatus.Ready(message: "The requested range is empty."));
         }
 
-        if (_cache is not null && _cache.TryGet(account.Id, range, out var cached))
+        ProviderSecret? secret = null;
+        if (_secretStore is not null)
+        {
+            secret = await _secretStore.GetAsync(account.Id, cancellationToken).ConfigureAwait(false);
+        }
+
+        var fingerprint = Fingerprint(account, secret);
+        if (_fingerprints.TryGetValue(account.Id, out var previous) && previous != fingerprint)
+        {
+            // The address, token, kind or enabled flag changed since the last attempt: cached
+            // events and ETag validators for the old configuration must not be reused.
+            InvalidateCaches(account);
+        }
+
+        _fingerprints[account.Id] = fingerprint;
+
+        if (!forceRefresh && _cache is not null && _cache.TryGet(account.Id, range, out var cached))
         {
             var cachedAt = _timeProvider.GetUtcNow();
             var lastSuccess = LastSuccessFor(account);
@@ -177,7 +252,17 @@ public sealed class ProviderSyncService
                 ProviderStatus.Unavailable($"No provider is registered for {account.Kind}."));
         }
 
-        var probe = await provider.ProbeAsync(account, cancellationToken).ConfigureAwait(false);
+        if (forceRefresh)
+        {
+            _cache?.Invalidate(account.Id);
+            if (provider is IProviderCacheInvalidator invalidator)
+            {
+                invalidator.InvalidateCache(account.Id);
+            }
+        }
+
+        var probe = await provider.ProbeAsync(ProviderRequest.Probe(account, secret), cancellationToken)
+            .ConfigureAwait(false);
         if (probe is null)
         {
             return RecordFailure(account, ProviderStatus.Unavailable("The provider did not return a status."));
@@ -188,7 +273,9 @@ public sealed class ProviderSyncService
             return RecordStatus(account, probe);
         }
 
-        var result = await provider.GetEventsAsync(account, range, cancellationToken).ConfigureAwait(false);
+        var result = await provider
+            .GetEventsAsync(ProviderRequest.Fetch(account, range, secret, forceRefresh), cancellationToken)
+            .ConfigureAwait(false);
         if (result is null)
         {
             return RecordFailure(account, ProviderStatus.Unavailable("The provider did not return a result."));
@@ -207,6 +294,20 @@ public sealed class ProviderSyncService
         var updatedAccount = account.WithLastSync(syncedAt);
 
         return RecordSuccess(updatedAccount, result.Status, events, syncedAt);
+    }
+
+    private void InvalidateCaches(ProviderAccount account)
+    {
+        _cache?.Invalidate(account.Id);
+        InvalidateProviderCache(account);
+    }
+
+    private void InvalidateProviderCache(ProviderAccount account)
+    {
+        if (_registry.TryGet(account.Kind, out var provider) && provider is IProviderCacheInvalidator invalidator)
+        {
+            invalidator.InvalidateCache(account.Id);
+        }
     }
 
     private ProviderSyncOutcome RecordSuccess(
@@ -228,6 +329,24 @@ public sealed class ProviderSyncService
             status,
             events,
             syncedAt);
+    }
+
+    private ProviderSyncOutcome RecordSkipped(ProviderAccount account, ProviderStatus status)
+    {
+        var attemptedAt = _timeProvider.GetUtcNow();
+        var lastSuccess = LastSuccessFor(account);
+        _states[account.Id] = new ProviderSyncState(
+            account.Id,
+            status,
+            attemptedAt,
+            lastSuccess,
+            LastError: null);
+
+        return new ProviderSyncOutcome(
+            account,
+            ProviderSyncStatus.Skipped,
+            status,
+            lastSuccessAt: lastSuccess);
     }
 
     private ProviderSyncOutcome RecordStatus(
@@ -262,6 +381,14 @@ public sealed class ProviderSyncService
     private DateTimeOffset? LastSuccessFor(ProviderAccount account) =>
         _states.TryGetValue(account.Id, out var state) ? state.LastSuccessAt : account.LastSyncAt;
 
+    private static AccountFingerprint Fingerprint(ProviderAccount account, ProviderSecret? secret) =>
+        new(account.Kind, account.Enabled, account.RemoteId, HashResource(secret?.Resource));
+
+    private static string HashResource(string? resource) =>
+        string.IsNullOrWhiteSpace(resource)
+            ? string.Empty
+            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(resource)), 0, 8);
+
     private static ProviderSyncStatus MapStatus(ProviderState state) => state switch
     {
         ProviderState.Ready => ProviderSyncStatus.Succeeded,
@@ -270,4 +397,10 @@ public sealed class ProviderSyncService
         ProviderState.Unauthorized => ProviderSyncStatus.Unauthorized,
         _ => ProviderSyncStatus.Failed,
     };
+
+    private readonly record struct AccountFingerprint(
+        ProviderKind Kind,
+        bool Enabled,
+        string? RemoteId,
+        string ResourceHash);
 }

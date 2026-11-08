@@ -22,7 +22,7 @@ public sealed class SkeletonProviderTests
         var provider = CreateProvider(kind);
         var account = ProviderAccount.Create(kind, "Account");
 
-        var status = await provider.ProbeAsync(account);
+        var status = await provider.ProbeAsync(ProviderRequest.Probe(account));
 
         Assert.Equal(ProviderState.NotConfigured, status.State);
         Assert.False(status.IsReady);
@@ -39,10 +39,26 @@ public sealed class SkeletonProviderTests
         var provider = CreateProvider(kind);
         var account = ProviderAccount.Create(kind, "Account", remoteId: "primary");
 
-        var status = await provider.ProbeAsync(account);
+        var status = await provider.ProbeAsync(ProviderRequest.Probe(account));
 
         Assert.Equal(ProviderState.NotImplemented, status.State);
         Assert.False(status.IsReady);
+    }
+
+    [Theory]
+    [InlineData(ProviderKind.Google)]
+    [InlineData(ProviderKind.MicrosoftGraph)]
+    [InlineData(ProviderKind.YandexCalDav)]
+    [InlineData(ProviderKind.GenericCalDav)]
+    public async Task SkeletonWithSecret_ReturnsNotImplemented(ProviderKind kind)
+    {
+        var provider = CreateProvider(kind);
+        var account = ProviderAccount.Create(kind, "Account");
+
+        var status = await provider.ProbeAsync(
+            ProviderRequest.Probe(account, new ProviderSecret { Password = "app-password" }));
+
+        Assert.Equal(ProviderState.NotImplemented, status.State);
     }
 
     [Theory]
@@ -56,7 +72,7 @@ public sealed class SkeletonProviderTests
         var account = ProviderAccount.Create(kind, "Account", remoteId: "primary");
         var range = ProviderEventRange.Days(new DateOnly(2026, 11, 1), new DateOnly(2026, 12, 1));
 
-        var result = await provider.GetEventsAsync(account, range);
+        var result = await provider.GetEventsAsync(ProviderRequest.Fetch(account, range));
 
         Assert.Empty(result.Events);
         Assert.Equal(ProviderState.NotImplemented, result.Status.State);
@@ -71,7 +87,9 @@ public sealed class SkeletonProviderTests
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => provider.ProbeAsync(ProviderAccount.Create(ProviderKind.Google, "Account"), cancellation.Token));
+            () => provider.ProbeAsync(
+                ProviderRequest.Probe(ProviderAccount.Create(ProviderKind.Google, "Account")),
+                cancellation.Token));
     }
 
     private static ICalendarProvider CreateProvider(ProviderKind kind) => kind switch

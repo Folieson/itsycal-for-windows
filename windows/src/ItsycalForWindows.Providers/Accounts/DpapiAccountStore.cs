@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
@@ -15,17 +16,27 @@ namespace ItsycalForWindows.Providers;
 /// <para>
 /// The two files are deliberately separate: <c>accounts.json</c> contains only the public
 /// <see cref="ProviderAccount"/> metadata and can be inspected, backed up or exported; secrets live
-/// in <c>secrets.dat</c> and are encrypted as one blob with
-/// <see cref="ProtectedData.Protect(byte[], byte[]?, DataProtectionScope)"/> using
-/// <see cref="DataProtectionScope.CurrentUser"/> and application entropy. A copied secrets file is
-/// therefore useless to another Windows user and the account JSON never contains a token.
+/// in <c>secrets.dat</c> and every account gets its own
+/// <see cref="ProtectedData.Protect(byte[], byte[]?, DataProtectionScope)"/> record encrypted with
+/// <see cref="DataProtectionScope.CurrentUser"/> and per-account entropy derived from
+/// <see cref="SecretEntropy"/> plus the account id. A copied secrets file is therefore useless to
+/// another Windows user, one damaged record cannot take the other accounts' secrets down, and the
+/// account JSON never contains a token or a token-bearing feed address.
 /// </para>
 /// <para>
 /// Writes go to a sibling temporary file, are flushed to disk and then moved over the target
-/// (atomic replace), so a crash cannot leave half-written JSON. The directory and both files get a
-/// protected ACL for the current user only; this is defense in depth on top of the per-user
-/// <c>%LOCALAPPDATA%</c> profile. Unreadable, corrupt or truncated files read as "empty" instead of
-/// taking the settings surface or a sync down.
+/// (atomic replace), so a crash cannot leave half-written JSON. Every operation is serialized by
+/// an in-process lock and a cross-process named mutex, because the Command Palette extension and
+/// the standalone flyout can run at the same time. The directory and both files get a protected
+/// ACL for the current user only; this is defense in depth on top of the per-user
+/// <c>%LOCALAPPDATA%</c> profile.
+/// </para>
+/// <para>
+/// Unreadable, corrupt or truncated files read as "empty" instead of taking the settings surface
+/// or a sync down. Before an unreadable file is overwritten it is moved aside as
+/// <c>&lt;name&gt;.corrupt-&lt;timestamp&gt;-&lt;token&gt;.bak</c>, so a corrupt store never silently
+/// destroys every secret. Account metadata with a token-bearing ICS remote id is redacted on read
+/// (such a value can only come from a hand-edited file or an older development build).
 /// </para>
 /// <para>
 /// The store has no logging path and never writes secret material to a file name, exception
@@ -43,11 +54,15 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     /// <summary>File name of the DPAPI-encrypted secret document.</summary>
     public const string SecretsFileName = "secrets.dat";
 
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
+
+    /// <summary>How long a store operation waits for the cross-process lock.</summary>
+    private static readonly TimeSpan MutexTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Application-specific DPAPI entropy. It binds the ciphertext to this feature; changing it
-    /// makes existing secrets unreadable, so it is versioned.
+    /// makes existing secrets unreadable, so it is versioned. A per-account digest is derived from
+    /// it in <see cref="DeriveEntropy"/>.
     /// </summary>
     private static readonly byte[] SecretEntropy = Encoding.UTF8.GetBytes("ItsycalForWindows.ProviderSecrets.v1");
 
@@ -62,7 +77,10 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     private readonly string _directory;
     private readonly string _accountsPath;
     private readonly string _secretsPath;
+    private readonly string _mutexName;
     private readonly TimeProvider _timeProvider;
+    private bool _accountsUnreadable;
+    private bool _secretsUnreadable;
 
     /// <summary>Creates a store at the default per-user location.</summary>
     public DpapiAccountStore()
@@ -86,6 +104,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
         _accountsPath = Path.Combine(_directory, AccountsFileName);
         _secretsPath = Path.Combine(_directory, SecretsFileName);
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _mutexName = MutexNameFor(_directory);
 
         EnsureDirectory();
     }
@@ -102,13 +121,10 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     /// <inheritdoc />
     public IReadOnlyList<ProviderAccount> List()
     {
-        lock (_gate)
-        {
-            return LoadAccounts()
-                .OrderBy(static account => account.CreatedAt)
-                .ThenBy(static account => account.Id, StringComparer.Ordinal)
-                .ToArray();
-        }
+        return WithStoreLock(() => LoadAccounts()
+            .OrderBy(static account => account.CreatedAt)
+            .ThenBy(static account => account.Id, StringComparer.Ordinal)
+            .ToArray());
     }
 
     /// <inheritdoc />
@@ -116,10 +132,8 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
 
-        lock (_gate)
-        {
-            return LoadAccounts().FirstOrDefault(account => SameId(account.Id, accountId));
-        }
+        return WithStoreLock(() =>
+            LoadAccounts().FirstOrDefault(account => SameId(account.Id, accountId)));
     }
 
     /// <inheritdoc />
@@ -127,7 +141,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     {
         ArgumentNullException.ThrowIfNull(account);
 
-        lock (_gate)
+        return WithStoreLock(() =>
         {
             var normalized = NormalizeForAdd(account);
             var accounts = LoadAccounts();
@@ -139,7 +153,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
             accounts.Add(normalized);
             SaveAccounts(accounts);
             return normalized;
-        }
+        });
     }
 
     /// <inheritdoc />
@@ -147,19 +161,22 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
 
-        lock (_gate)
+        return WithStoreLock(() =>
         {
             var accounts = LoadAccounts();
-            var removed = accounts.RemoveAll(account => SameId(account.Id, accountId));
-            if (removed == 0)
+            var index = accounts.FindIndex(account => SameId(account.Id, accountId));
+            if (index < 0)
             {
                 return false;
             }
 
-            SaveAccounts(accounts);
+            // Remove the secret first: an orphaned account without a secret shows an honest
+            // "not configured" state, while an orphaned secret would outlive its account.
             RemoveSecretUnlocked(accountId);
+            accounts.RemoveAt(index);
+            SaveAccounts(accounts);
             return true;
-        }
+        });
     }
 
     /// <inheritdoc />
@@ -167,7 +184,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
 
-        lock (_gate)
+        return WithStoreLock(() =>
         {
             var accounts = LoadAccounts();
             var index = accounts.FindIndex(account => SameId(account.Id, accountId));
@@ -179,7 +196,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
             accounts[index] = accounts[index] with { Enabled = enabled };
             SaveAccounts(accounts);
             return true;
-        }
+        });
     }
 
     /// <inheritdoc />
@@ -187,7 +204,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
 
-        lock (_gate)
+        return WithStoreLock(() =>
         {
             var accounts = LoadAccounts();
             var index = accounts.FindIndex(account => SameId(account.Id, accountId));
@@ -199,7 +216,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
             accounts[index] = accounts[index].WithLastSync(lastSyncAt);
             SaveAccounts(accounts);
             return true;
-        }
+        });
     }
 
     /// <inheritdoc />
@@ -207,10 +224,24 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
 
-        lock (_gate)
+        ProviderSecret? found = null;
+        var result = WithStoreLock(() =>
         {
-            return LoadSecrets().TryGetValue(accountId, out secret);
-        }
+            var secrets = LoadSecrets();
+            var exists = secrets.TryGetValue(accountId, out var value);
+            found = value;
+            return exists;
+        });
+
+        secret = found;
+        return result;
+    }
+
+    /// <inheritdoc />
+    public Task<ProviderSecret?> GetAsync(string accountId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(TryGet(accountId, out var secret) ? secret : null);
     }
 
     /// <inheritdoc />
@@ -219,7 +250,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
         ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
         ArgumentNullException.ThrowIfNull(secret);
 
-        lock (_gate)
+        return WithStoreLock(() =>
         {
             var secrets = LoadSecrets();
             if (secret.IsEmpty)
@@ -236,7 +267,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
             secrets[accountId] = secret;
             SaveSecrets(secrets);
             return true;
-        }
+        });
     }
 
     /// <inheritdoc />
@@ -244,10 +275,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
 
-        lock (_gate)
-        {
-            return RemoveSecretUnlocked(accountId);
-        }
+        return WithStoreLock(() => RemoveSecretUnlocked(accountId));
     }
 
     private bool RemoveSecretUnlocked(string accountId)
@@ -272,6 +300,26 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
         if (!Enum.IsDefined(account.Kind))
         {
             throw new ArgumentException($"Unknown provider kind '{account.Kind}'.", nameof(account));
+        }
+
+        if (!string.IsNullOrWhiteSpace(account.RemoteId))
+        {
+            if (account.Kind == ProviderKind.IcsSubscription &&
+                !IcsFeedAddress.IsSafeRemoteId(account.RemoteId))
+            {
+                throw new ArgumentException(
+                    "An ICS account may store only the display-safe scheme and host in RemoteId; " +
+                    "keep the full feed address in the provider secret.",
+                    nameof(account));
+            }
+
+            if (Uri.TryCreate(account.RemoteId, UriKind.Absolute, out var remoteUri) &&
+                !string.IsNullOrEmpty(remoteUri.UserInfo))
+            {
+                throw new ArgumentException(
+                    "A remote id must not contain embedded credentials.",
+                    nameof(account));
+            }
         }
 
         var displayName = string.IsNullOrWhiteSpace(account.DisplayName)
@@ -302,17 +350,37 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
             var json = File.ReadAllText(_accountsPath, Encoding.UTF8);
             if (string.IsNullOrWhiteSpace(json))
             {
+                _accountsUnreadable = true;
                 return [];
             }
 
             var document = JsonSerializer.Deserialize<AccountsDocument>(json, JsonOptions);
-            return document?.Accounts ?? [];
+            if (document?.Accounts is null)
+            {
+                _accountsUnreadable = true;
+                return [];
+            }
+
+            return document.Accounts
+                .Where(static account => account is not null)
+                .Select(SanitizeForRead)
+                .ToList();
         }
         catch (Exception)
         {
+            _accountsUnreadable = true;
             return [];
         }
 #pragma warning restore CA1031
+    }
+
+    private static ProviderAccount SanitizeForRead(ProviderAccount account)
+    {
+        // An older development build stored the full feed URL here. Never surface it again; the
+        // original file stays untouched until the next write quarantines and replaces it.
+        return account.Kind == ProviderKind.IcsSubscription && !IcsFeedAddress.IsSafeRemoteId(account.RemoteId)
+            ? account with { RemoteId = null }
+            : account;
     }
 
     private Dictionary<string, ProviderSecret> LoadSecrets()
@@ -326,20 +394,40 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
 #pragma warning disable CA1031 // DPAPI, IO and JSON failures all mean "no readable secrets".
         try
         {
-            var protectedBytes = File.ReadAllBytes(_secretsPath);
-            if (protectedBytes.Length == 0)
+            var json = File.ReadAllText(_secretsPath, Encoding.UTF8);
+            if (string.IsNullOrWhiteSpace(json))
             {
+                _secretsUnreadable = true;
                 return empty;
             }
 
-            var plainBytes = ProtectedData.Unprotect(protectedBytes, SecretEntropy, DataProtectionScope.CurrentUser);
-            var document = JsonSerializer.Deserialize<SecretsDocument>(plainBytes, JsonOptions);
-            return document?.Secrets is { } secrets
-                ? new Dictionary<string, ProviderSecret>(secrets, StringComparer.Ordinal)
-                : empty;
+            var document = JsonSerializer.Deserialize<SecretsDocument>(json, JsonOptions);
+            if (document?.Secrets is null)
+            {
+                _secretsUnreadable = true;
+                return empty;
+            }
+
+            var secrets = new Dictionary<string, ProviderSecret>(StringComparer.Ordinal);
+            foreach (var (accountId, protectedValue) in document.Secrets)
+            {
+                if (TryUnprotect(accountId, protectedValue, out var secret))
+                {
+                    secrets[accountId] = secret;
+                }
+                else
+                {
+                    // Keep the healthy records; quarantine the original file before overwriting
+                    // it so the damaged record can still be recovered.
+                    _secretsUnreadable = true;
+                }
+            }
+
+            return secrets;
         }
         catch (Exception)
         {
+            _secretsUnreadable = true;
             return empty;
         }
 #pragma warning restore CA1031
@@ -347,6 +435,8 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
 
     private void SaveAccounts(IReadOnlyList<ProviderAccount> accounts)
     {
+        QuarantineIfUnreadable(ref _accountsUnreadable, _accountsPath);
+
         var document = new AccountsDocument
         {
             Version = CurrentVersion,
@@ -359,15 +449,124 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
 
     private void SaveSecrets(Dictionary<string, ProviderSecret> secrets)
     {
+        QuarantineIfUnreadable(ref _secretsUnreadable, _secretsPath);
+
         var document = new SecretsDocument
         {
             Version = CurrentVersion,
-            Secrets = secrets,
+            Secrets = new Dictionary<string, string>(StringComparer.Ordinal),
         };
 
-        var plainBytes = JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
-        var protectedBytes = ProtectedData.Protect(plainBytes, SecretEntropy, DataProtectionScope.CurrentUser);
-        WriteAtomic(_secretsPath, protectedBytes);
+        foreach (var (accountId, secret) in secrets)
+        {
+            if (secret.IsEmpty)
+            {
+                continue;
+            }
+
+            var plainBytes = JsonSerializer.SerializeToUtf8Bytes(secret, JsonOptions);
+            try
+            {
+                var protectedBytes = ProtectedData.Protect(
+                    plainBytes,
+                    DeriveEntropy(accountId),
+                    DataProtectionScope.CurrentUser);
+                document.Secrets[accountId] = Convert.ToBase64String(protectedBytes);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(plainBytes);
+            }
+        }
+
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(document, JsonOptions);
+        WriteAtomic(_secretsPath, bytes);
+    }
+
+    private void QuarantineIfUnreadable(ref bool unreadable, string path)
+    {
+        if (!unreadable)
+        {
+            return;
+        }
+
+        unreadable = false;
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var quarantinePath = string.Concat(
+            path,
+            ".corrupt-",
+            _timeProvider.GetUtcNow().ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture),
+            "-",
+            Guid.NewGuid().ToString("N")[..8],
+            ".bak");
+
+#pragma warning disable CA1031 // Quarantine is best effort; the write still has to succeed.
+        try
+        {
+            File.Move(path, quarantinePath);
+        }
+        catch (Exception)
+        {
+            try
+            {
+                File.Copy(path, quarantinePath, overwrite: false);
+            }
+            catch (Exception)
+            {
+                // If the file cannot be moved or copied, the atomic replace still writes the new
+                // content; no secret is written to the quarantine path by this process.
+            }
+        }
+#pragma warning restore CA1031
+    }
+
+    private static bool TryUnprotect(string accountId, string protectedValue, out ProviderSecret secret)
+    {
+        secret = null!;
+
+#pragma warning disable CA1031 // One damaged record reads as "no secret" instead of failing the store.
+        try
+        {
+            var cipherBytes = Convert.FromBase64String(protectedValue);
+            var plainBytes = ProtectedData.Unprotect(
+                cipherBytes,
+                DeriveEntropy(accountId),
+                DataProtectionScope.CurrentUser);
+
+            try
+            {
+                var value = JsonSerializer.Deserialize<ProviderSecret>(plainBytes, JsonOptions);
+                if (value is null)
+                {
+                    return false;
+                }
+
+                secret = value;
+                return true;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(plainBytes);
+            }
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+#pragma warning restore CA1031
+    }
+
+    private static byte[] DeriveEntropy(string accountId)
+    {
+        var accountBytes = Encoding.UTF8.GetBytes(accountId);
+        var buffer = new byte[SecretEntropy.Length + accountBytes.Length];
+        SecretEntropy.CopyTo(buffer, 0);
+        accountBytes.CopyTo(buffer, SecretEntropy.Length);
+        return SHA256.HashData(buffer);
     }
 
     private static void WriteAtomic(string path, byte[] bytes)
@@ -388,6 +587,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
                 stream.Flush(flushToDisk: true);
             }
 
+            TryApplyUserOnlyAcl(temporaryPath);
             File.Move(temporaryPath, path, overwrite: true);
             TryApplyUserOnlyAcl(path);
         }
@@ -402,8 +602,8 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
             }
             catch (Exception)
             {
-                // Best effort cleanup; a leftover temp file never contains an account secret in
-                // plaintext (the secrets blob is already encrypted when it reaches this method).
+                // Best effort cleanup; a leftover temp file never contains account data in
+                // plaintext: account metadata is public and the secrets blob is already encrypted.
             }
         }
     }
@@ -412,6 +612,76 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     {
         System.IO.Directory.CreateDirectory(_directory);
         TryApplyUserOnlyAcl(_directory);
+    }
+
+    private T WithStoreLock<T>(Func<T> action)
+    {
+        using var mutex = TryCreateMutex();
+        var acquired = mutex is null;
+
+        if (mutex is not null)
+        {
+            try
+            {
+                acquired = mutex.WaitOne(MutexTimeout);
+            }
+            catch (AbandonedMutexException)
+            {
+                acquired = true;
+            }
+        }
+
+        if (!acquired)
+        {
+            throw new IOException("The provider account store is locked by another process.");
+        }
+
+        try
+        {
+            lock (_gate)
+            {
+                return action();
+            }
+        }
+        finally
+        {
+            if (mutex is not null)
+            {
+                try
+                {
+                    mutex.ReleaseMutex();
+                }
+                catch (ApplicationException)
+                {
+                    // The named mutex was abandoned and re-acquired; nothing left to release.
+                }
+            }
+        }
+    }
+
+    private Mutex? TryCreateMutex()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+#pragma warning disable CA1031 // A restrictive policy must not take the settings surface down.
+        try
+        {
+            return new Mutex(initiallyOwned: false, _mutexName);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+#pragma warning restore CA1031
+    }
+
+    private static string MutexNameFor(string directory)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(directory.ToUpperInvariant()));
+        return "Local\\ItsycalForWindows.ProviderAccounts." + Convert.ToHexString(hash, 0, 16);
     }
 
     private static void TryApplyUserOnlyAcl(string path)
@@ -473,6 +743,7 @@ public sealed class DpapiAccountStore : IAccountStore, IProviderSecretStore
     {
         public int Version { get; set; }
 
-        public Dictionary<string, ProviderSecret> Secrets { get; set; } = new(StringComparer.Ordinal);
+        /// <summary>Account id to base64(DPAPI ciphertext of the serialized secret).</summary>
+        public Dictionary<string, string> Secrets { get; set; } = new(StringComparer.Ordinal);
     }
 }

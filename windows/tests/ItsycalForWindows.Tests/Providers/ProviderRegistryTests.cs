@@ -61,9 +61,9 @@ public sealed class ProviderRegistryTests
     [Fact]
     public void Catalog_RegistersEveryProviderKind()
     {
-        using var httpClient = new HttpClient(new FakeHttpMessageHandler(
-            static _ => new HttpResponseMessage(HttpStatusCode.OK)));
-        var registry = ProviderCatalog.CreateRegistry(httpClient);
+        var handler = new FakeHttpMessageHandler(
+            static _ => new HttpResponseMessage(HttpStatusCode.OK));
+        var registry = ProviderCatalog.CreateRegistry(handler);
 
         Assert.Equal(
             new[]

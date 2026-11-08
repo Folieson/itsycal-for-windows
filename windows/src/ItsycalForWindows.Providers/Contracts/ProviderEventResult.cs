@@ -47,4 +47,8 @@ public sealed record ProviderEventResult
         bool notModified = false,
         ProviderCapabilities capabilities = ProviderCapabilities.ReadOnlyEvents) =>
         new(ProviderStatus.Ready(capabilities), events, notModified);
+
+    /// <summary>Safe representation: event counts only, never event content.</summary>
+    public override string ToString() =>
+        $"ProviderEventResult {{ Status = {Status}, EventCount = {Events.Count}, NotModified = {NotModified} }}";
 }
