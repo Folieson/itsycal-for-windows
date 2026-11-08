@@ -56,31 +56,37 @@ Behaviour changes follow the team role model:
 
 `product owner` (scope/priority) → `analyst` (spec in `docs/specs/`) → **independent
 spec review** → `developer` (tests first) → **independent tester verification** →
-**independent code review** → `lead` merges.
+**independent design review (UI changes)** → **independent code review** → `lead` merges.
 
 - The user is the product owner; scope or priority changes need the user's decision, not
   the agent's.
 - The analyst authors the spec; the spec-reviewer is a different agent. The developer
   implements only an accepted spec. The tester is read-only and is a different agent from
-  the developer and both reviewers. The code-reviewer checks the diff against the accepted
+  the developer and both reviewers. UI changes also get an independent design review of the
+  installed-build screenshots. The code-reviewer checks the diff against the accepted
   spec and the CI evidence.
 - Bug fixes and docs-only changes may skip the PO/analyst artifacts, but a behaviour
   change still needs a regression test and the independent code review.
 
 ## Independent reviews
 
-Behaviour changes pass two independent, read-only reviews. The author never reviews their own
-change, and the two roles are separate agents/sessions:
+Behaviour changes pass independent, read-only reviews. The author never reviews their own
+change, and every gate is a separate agent/session:
 
 1. **Spec review** — after the spec is written and before implementation. The
    `spec-reviewer` role audits acceptance criteria, their test mapping, edge/security/privacy
    cases and scope; implementation starts only after `approve` or `approve with notes`.
-2. **Code review** — before merge. The `code-reviewer` role checks the diff against the
+2. **Design review (UI changes only)** — after the tester and before merge. The
+   `design-reviewer` role judges screenshots captured from the installed build against the
+   accepted UI spec and the product/reference direction: compactness, hierarchy, density,
+   typography, colour, states, truncation, required actions. It must be independent of the
+   author, tester and both reviewers; host-controlled constraints are not design defects.
+3. **Code review** — before merge. The `code-reviewer` role checks the diff against the
    accepted spec, the tests and the CI run/coverage. It must not be the author and must not be
    the agent that reviewed the spec.
 
-Record both verdicts (reviewer, date, verdict, link or quoted summary) in the PR under
-"Independent reviews". Every blocking finding is resolved before merge or explicitly deferred
+Record every verdict (reviewer, date, verdict, link or quoted summary, screenshots for the
+design gate) in the PR under "Independent reviews". Every blocking finding is resolved before merge or explicitly deferred
 with the user's agreement. The Lead merges only with both verdicts and green checks.
 
 ## Build and verify

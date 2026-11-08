@@ -131,3 +131,30 @@ a coverage floor and MSIX packaging on every PR (`.github/workflows/windows-buil
 MIT. See [LICENSE.txt](LICENSE.txt) — it retains the upstream ItsyCal copyright. The Windows
 port reuses material from Microsoft PowerToys; see
 [windows/THIRD-PARTY-NOTICES.md](windows/THIRD-PARTY-NOTICES.md).
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
+[SignPath Foundation](https://signpath.org/).
+
+- **Authors / committers:** [@Folieson](https://github.com/Folieson).
+- **Reviewers:** [@Folieson](https://github.com/Folieson) reviews every change proposed by
+  people who are not committers before it is merged.
+- **Approvers:** [@Folieson](https://github.com/Folieson) approves every signing request.
+  Each release is signed only after a manual approval.
+- **What is signed:** only binaries built from this repository's source by the public GitHub
+  Actions pipeline (the standalone WinUI 3 flyout and its MSIX installer; the optional
+  PowerToys Command Palette extension MSIX). Upstream MIT components are not submitted for
+  signing. The development certificate used for local/test builds is not a trusted public
+  signing identity.
+- **Privacy:** this program will not transfer any information to other networked systems
+  unless specifically requested by the user or the person installing or operating it. There
+  is no telemetry and no calendar/event content is logged or uploaded; the only built-in
+  network use is the opt-in self-update check against GitHub Releases (GitHub's own privacy
+  policy applies to that request), and future calendar providers only after the user
+  configures them. See [SECURITY.md](SECURITY.md) for the data-handling details.
+- **Installation / uninstallation:** MSIX install and `Remove-AppxPackage` uninstall are
+  documented above; no background services or system configuration changes are made beyond
+  the user-created app data folder and the optional autostart setting. Remove the app data
+  folder manually if desired.
+- **Reproducibility:** every release artifact is produced by GitHub Actions from the tagged
+  commit; the workflow, test suite and packaging scripts are in this repository.

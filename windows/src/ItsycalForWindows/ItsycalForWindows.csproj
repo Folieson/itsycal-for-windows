@@ -61,6 +61,12 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Calendar domain and event providers shared with the standalone flyout (ADR 0003).
+         The reference keeps its own assembly, so its DLL is part of the MSIX payload. -->
+    <ProjectReference Include="..\ItsycalForWindows.Core\ItsycalForWindows.Core.csproj" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)' != 'true' and '$(EnableMsixTooling)' == 'true'">
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>

@@ -330,7 +330,8 @@ jobs:
               '',
               'Compare each download with `SHA256SUMS.txt` (`Get-FileHash <file> -Algorithm SHA256`).',
               '',
-              "Full changelog: https://github.com/$repository/commits/$tag"
+              "Full changelog: https://github.com/$repository/commits/$tag",
+              "Code signing policy: https://github.com/$repository/blob/master/README.md#code-signing-policy"
           )
 
           $changelogPath = 'CHANGELOG.md'
