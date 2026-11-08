@@ -135,12 +135,12 @@ one engineer including tests), not schedule promises.
 
 | ID | Priority | Item | Acceptance / outcome | Size | Depends on | Status |
 |---|---|---|---|---|---|---|
-| PRV-300 | P0 | Provider epic, registry and shared contracts | `ItsycalForWindows.Providers` framework + ICS subscriptions first slice is in PR #52 (registry/contracts, DPAPI secret delivery, sync, ICS, thin `IEventSource` adapter); both-surface composition and provider UI remain PRV-306/PRV-308, so the app reference was removed until wiring. ADR 0005 accepted; scope questions resolved or deferred in ADR 0005 §10. | M | — | In review — PR #52 |
+| PRV-300 | P0 | Provider epic, registry and shared contracts | `ItsycalForWindows.Providers` framework + ICS subscriptions first slice is in PR #52 (registry/contracts, DPAPI secret delivery, sync, ICS, thin `IEventSource` adapter); both-surface composition and provider UI remain PRV-306 (PRV-308 supplies the encrypted cache), so the app reference was removed until wiring. ADR 0005 accepted; scope questions resolved or deferred in ADR 0005 §10. | M | — | In review — PR #52 |
 | PRV-301 | P0 | Google Calendar (Gmail/Workspace) | Google Calendar API v3, OAuth 2.0 authorization code + PKCE on loopback, `calendar.readonly`, `syncToken` incremental with full resync on `410`, Workspace admin-policy error handled; verified on an installed signed MSIX with a personal and a Google Workspace account. | L | PRV-300, PRV-307 | Planned |
 | PRV-302 | P0 | Microsoft Graph (Outlook.com/M365/Exchange Online) | Graph `me/calendars` + `me/calendarView` + delta, OAuth 2.0 public client + PKCE, `Calendars.Read` delegated; Outlook.com and a Microsoft 365 tenant verified; tenant admin-consent-required handled; on-prem Exchange explicitly out of v1 (EWS follow-up, PO Q1). | L | PRV-300, PRV-307 | Planned |
 | PRV-303 | P0 | Yandex Calendar | CalDAV preset at `caldav.yandex.ru` with app password (2FA guidance + deep link), no public OAuth assumed; verified with a 2FA-enabled account; app-password revocation instructions. | S | PRV-304, PRV-307 | Planned |
 | PRV-304 | P0 | Generic CalDAV engine + presets | RFC 4791/6764 principal and calendar-home discovery, time-range `REPORT`, ETag/`sync-token` incremental with full-resync fallback; presets validated on iCloud, Fastmail, Nextcloud and mailbox.org; TLS validation never disabled. | L | PRV-300, PRV-307 | Planned |
-| PRV-305 | P1 | ICS subscriptions (HTTP(S) + local) | `ETag`/`If-Modified-Since` and `304`, configurable refresh with jitter, size cap, existing parser reused; no `user:pass@` credentials; token-in-path feeds treated as secrets; not a Store-gate blocker (local `.ics` already works). | M | PRV-300, PRV-307 | Planned |
+| PRV-305 | P1 | ICS subscriptions (HTTPS + local) | `ETag`/`If-Modified-Since` and `304`, configurable refresh with jitter, size cap, existing parser reused; no `user:pass@` credentials; token-in-path feeds treated as secrets; not a Store-gate blocker (local `.ics` already works). | M | PRV-300, PRV-307 | Planned |
 | PRV-306 | P0 | Settings and authentication UX | Shared account model; add/enable/disable/sign-in/re-authenticate/sign-out/remove; status/last sync/errors; full `AccountsWindow` + CmdPal status page **including the `ProviderEventSource`/composite wiring into both surfaces**; **owns the `settings.json` account-metadata layout** per ADR 0005 §4.2 (depends on PRV-307 for the secret layout); installed-build screenshots. | L | PRV-300, PRV-307 | Planned |
 | PRV-307 | P0 | Token and secret storage | Refresh tokens in the Windows Credential Locker, app passwords/token URLs in DPAPI per account, atomic rotation, no plaintext, redaction tests, deletion on sign-out/remove; 20-entry locker cap; **owns the final `providers\` secret layout and the migration from the framework's per-account `secrets.dat`**. | M | PRV-300 | Planned |
 | PRV-308 | P0 | Sync scheduler, cache and status | On-demand visible-range fetch plus in-process background refresh (no service/task); **encrypted on-disk event cache (PO decision; DPAPI-wrapped key, TTL/purge, no plaintext)**, backoff/jitter, `429 Retry-After`, offline and partial-failure states; local sources never hidden. The framework's in-memory TTL cache is a placeholder. | M | PRV-300, first adapter | Planned |
@@ -183,8 +183,9 @@ deferred in the ADR.
   PRV-311 and REL-303). Trusted signing, the v2.0 package identity and WinGet may proceed
   only with the PO's decision on ADR 0005 Q5; no Store package is submitted early.
 - Provider v1 is read-only and opt-in per account: no write scopes, no telemetry, no plaintext
-  event content on disk or in logs, tokens per ADR 0005 §4.2. On-prem Exchange, write support and an
-  encrypted on-disk cache is PRV-308, outside this framework slice (ADR 0005 Q7; plaintext at rest is never allowed).
+  event content on disk or in logs, tokens per ADR 0005 §4.2. On-prem Exchange and write support remain out of v1 (ADR 0005 Q1/Q2); the
+  encrypted on-disk cache is PRV-308 (Q7), outside this framework slice; plaintext at rest
+  is never allowed.
 - Every user-visible change adds a `CHANGELOG.md` line under `[Unreleased]`; a release tag
   requires a matching `## [X.Y.Z]` section.
 - Rebranding is a package-identity change ([ADR 0004](adr/0004-rebrand-independent-product.md)):
