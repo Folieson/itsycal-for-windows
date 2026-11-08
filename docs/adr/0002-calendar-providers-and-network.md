@@ -82,5 +82,7 @@ At the same time the project rule said "no network calls", which blocks every re
 - `docs/adr/0001-windows-command-palette-extension.md` (original extension decisions)
 - `docs/ROADMAP.md` (milestones and backlog)
 - `docs/SIGNING.md` (trusted signing options for public releases)
-- `windows/src/ItsycalForWindows/Services/` (event sources and composite)
-- `windows/src/ItsycalForWindows/Services/UpdateService.cs` (self-update, once merged)
+- `windows/src/ItsycalForWindows.Core/Services/` (provider boundary, ICS/appointment/composite
+  sources, range helpers)
+- `windows/src/ItsycalForWindows.Core/Models/` (calendar and event models)
+- `windows/src/ItsycalForWindows/Services/UpdateService.cs` (self-update)

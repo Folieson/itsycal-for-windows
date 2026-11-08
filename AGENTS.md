@@ -8,9 +8,11 @@ which is not part of this repository anymore.
 ## Layout
 
 - `windows/` — the Windows extension: C#/.NET 10, Command Palette dock band + calendar.
-- `windows/src/ItsycalForWindows/` — extension source (`Program.cs`, provider, `Models/`,
-  `Pages/`, `Services/`, package assets).
-- `windows/tests/` — unit tests for the pure logic (calendar grid, event ranges).
+- `windows/src/ItsycalForWindows.Core/` — shared calendar core: `Models/` and the event
+  providers (`IEventSource`, ICS, appointments, composite), with no UI or packaging.
+- `windows/src/ItsycalForWindows/` — Command Palette shell: `Program.cs`, commands provider,
+  `Pages/`, updater, settings and package assets.
+- `windows/tests/` — unit tests for the shared core and the update logic.
 - `windows/scripts/` — development tooling: `deploy-local.ps1` (MSIX dev install),
   `Build-Release.ps1` (signed release assets), `New-BrandAssets.ps1`.
 - `winget/` — WinGet manifests for the MSIX release (`InstallerType: msix`).
