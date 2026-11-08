@@ -365,7 +365,7 @@ public static class IcsParser
         {
             if (properties.TryGetValue(textProperty, out var textPropertyValue))
             {
-                var meetingUrl = FindMeetingUrl(textPropertyValue.Value);
+                var meetingUrl = FindMeetingUrl(Unescape(textPropertyValue.Value));
                 if (meetingUrl is not null)
                 {
                     return meetingUrl;
@@ -408,12 +408,10 @@ public static class IcsParser
         }
 
         var host = uri.Host.ToLowerInvariant();
-        return host is "meet.google.com" or "teams.live.com"
+        return host is "meet.google.com" or "teams.microsoft.com" or "teams.live.com" or "zoom.us" or "webex.com" or "ktalk.ru"
             || host.EndsWith(".zoom.us", StringComparison.Ordinal)
-            || host == "zoom.us"
-            || host.StartsWith("teams.", StringComparison.Ordinal)
-            || host.Contains("webex", StringComparison.Ordinal)
-            || host.Contains("ktalk", StringComparison.Ordinal);
+            || host.EndsWith(".webex.com", StringComparison.Ordinal)
+            || host.EndsWith(".ktalk.ru", StringComparison.Ordinal);
     }
     private static bool TryParseDateTime(
         string value,

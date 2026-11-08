@@ -55,7 +55,7 @@ that is self-contained:
    download the newest x64 (or arm64) MSIX together with its matching `_dev.cer`.
 2. From an **elevated** PowerShell, trust the development certificate once and register the
    package (the certificate subject must match the package publisher,
-   `CN=ItsycalForWindows-Dev`; its SHA-256 thumbprint is published in the release notes):
+   `CN=ItsycalForWindows-Dev`; the signer thumbprint is printed in the release workflow log):
 
    ```powershell
    Import-Certificate -FilePath .\ItsycalForWindows_<version>_dev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
@@ -78,9 +78,9 @@ The build is a pre-release because it is signed with a development certificate.
   newer MSIX with `Add-AppxPackage`, then open Command Palette again. Each build stamps a
   higher package revision, so no uninstall is needed. If Windows reports `0x80073D02`
   (files in use), close the palette and the extension process and retry.
-- **Uninstall**: `Get-AppxPackage ItsycalForWindows | Remove-AppxPackage`. App-owned data
-  (settings, `.ics` copies, update log) stays under `%LOCALAPPDATA%\ItsycalForWindows`; remove
-  that folder manually if desired. If you no longer trust the development certificate, remove
+- **Uninstall**: `Get-AppxPackage ItsycalForWindows | Remove-AppxPackage`. Settings, update state and logs stay under `%LOCALAPPDATA%\ItsycalForWindows`;
+  the `calendars` folder contains your own exported `.ics` files — do not delete it unless you
+  have copies elsewhere. If you no longer trust the development certificate, remove
   it with `Get-ChildItem Cert:\LocalMachine\TrustedPeople | Where-Object Subject -like '*ItsycalForWindows-Dev*' | Remove-Item`.
 
 ## Data and network

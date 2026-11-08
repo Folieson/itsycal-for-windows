@@ -12,8 +12,9 @@ with read-only events from the Windows appointment store.
 | Windows SDK 10.0.26100 | CsWinRT projection, MSIX packaging, `signtool` |
 | PowerToys 0.102+ | Command Palette host |
 
-A code-signing certificate is only needed to produce a trusted release package; development
-packages use the persistent development certificate (`ItsycalForWindows-Dev`); a trusted
+A code-signing certificate is only needed to produce a trusted release package; published development
+releases are signed with the persistent development certificate (`ItsycalForWindows-Dev`); a
+local `Build-Release.ps1 -SelfSigned` build uses an ephemeral certificate, and a trusted
 code-signing certificate is only required for a public trusted release. See `docs/SIGNING.md` at the repository
 root.
 

@@ -283,6 +283,47 @@ public sealed class IcsParserTests
         Assert.Equal("https://meet.google.com/xyz-abcd-efg", events[0].OnlineMeetingLink);
     }
     [Fact]
+    public void Parse_EscapedGoogleMeetDescriptionKeepsTheLinkClean()
+    {
+        var ics = IcsTestData.Event(
+            "DTSTART:20261110T090000Z",
+            "SUMMARY:Google sync",
+            @"DESCRIPTION:Join with Google Meet: https://meet.google.com/abc-defg-hij\n\nJoin by phone: +1 555 0100");
+
+        var events = IcsParser.Parse(ics);
+
+        Assert.Equal(1, events.Count);
+        Assert.Equal("https://meet.google.com/abc-defg-hij", events[0].OnlineMeetingLink);
+    }
+
+    [Fact]
+    public void Parse_NonMeetingUrlInDescriptionIsIgnored()
+    {
+        var ics = IcsTestData.Event(
+            "DTSTART:20261110T090000Z",
+            "SUMMARY:Docs",
+            "DESCRIPTION:Read https://example.com/docs");
+
+        var events = IcsParser.Parse(ics);
+
+        Assert.Equal(1, events.Count);
+        Assert.Null(events[0].OnlineMeetingLink);
+    }
+
+    [Fact]
+    public void Parse_SpoofedMeetingHostIsIgnored()
+    {
+        var ics = IcsTestData.Event(
+            "DTSTART:20261110T090000Z",
+            "SUMMARY:Spoof",
+            "DESCRIPTION:https://teams.evil.com/join");
+
+        var events = IcsParser.Parse(ics);
+
+        Assert.Equal(1, events.Count);
+        Assert.Null(events[0].OnlineMeetingLink);
+    }
+    [Fact]
     public void Parse_PropertyGroupPrefixIsIgnored()
     {
         var ics = IcsTestData.Event(
