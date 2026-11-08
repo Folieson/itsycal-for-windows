@@ -104,3 +104,14 @@ Manual verification is a deliberate complement, not a substitute for the unit te
   seam with download-level tests (AC-4/5/6/7/8), timeout and mid-stream transport fallback,
   raw coverage comparison, `coverlet.collector` in THIRD-PARTY-NOTICES, corrected CI ordering
   wording and honest red-run wording. Re-review requested on PR #30.
+## Reconciliation (process deviation)
+
+The implementation in this spec reached `master` accidentally early: branch
+`docs/team-role-model` was created from the unmerged PR #30 branch, so PR #31's squash diff
+contained PR #30's code, tests, workflow and spec changes. PR #30 is closed as superseded; the
+behaviour change is on `master` and was reviewed independently against that tree. Two review
+findings remained after the merge (AC-4 mid-stream `IOException` fallback and AC-8 "no API
+fallback after user cancellation" assertion) and are fixed in PR #32 together with a new
+branching rule: never stack feature branches, always branch from current `master`, and verify
+`git diff master...HEAD --stat` before opening a PR. The independent code-review verdict and
+this deviation are recorded in PR #32 and the harness checkpoint.

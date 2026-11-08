@@ -65,6 +65,7 @@ spec review** → `developer` (tests first) → **independent tester verificatio
   spec and the CI evidence.
 - Bug fixes and docs-only changes may skip the PO/analyst artifacts, but a behaviour
   change still needs a regression test and the independent code review.
+
 ## Independent reviews
 
 Behaviour changes pass two independent, read-only reviews. The author never reviews their own
@@ -96,6 +97,12 @@ Public releases are signed MSIX packages built per architecture by
 MSIX app-extension catalog, so there is no unpackaged build — see `windows/README.md` and
 `docs/SIGNING.md`. The release pipeline is `.github/workflows/release.yml` (tag `v*`); CI
 builds, packages and tests every PR.
+
+## Branching
+
+- Start every branch from a freshly fetched `master`: `git switch master && git pull --ff-only && git switch -c <type>/<slug>`. Never branch from another feature branch.
+- Before opening a PR, run `git diff master...HEAD --stat` and confirm it contains only this change. If another PR's commits appear, the branch is stacked: rebase or cherry-pick onto `master` and re-verify.
+- Never stack branches.
 
 ## Commits and PRs
 

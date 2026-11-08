@@ -633,6 +633,105 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
+    public void DownloadAsync_MidStreamIOExceptionFallsBackToApi()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(request =>
+        {
+            if (request.RequestUri!.Host == "github.com")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new FailingReadContent() };
+            }
+
+            return request.RequestUri.AbsolutePath.Contains("/assets/7", StringComparison.Ordinal)
+                ? Ok(SumsBytes(MsixName))
+                : Ok(MsixBytes);
+        });
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+
+            Assert.True(result.Success, result.Message);
+            Assert.Contains(handler.Requests, request => request.RequestUri!.Host == "api.github.com");
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void DownloadAsync_PreCancelledTokenNeverFallsBackToApi()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(_ => Status(HttpStatusCode.OK));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64, cancellation.Token)
+                .GetAwaiter().GetResult();
+
+            Assert.False(result.Success);
+            Assert.DoesNotContain(handler.Requests, request => request.RequestUri!.Host == "api.github.com");
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    private sealed class FailingReadContent : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) =>
+            throw new IOException("simulated mid-stream failure");
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+
+        protected override Task<Stream> CreateContentReadStreamAsync() =>
+            Task.FromResult<Stream>(new FailingReadStream());
+    }
+
+    private sealed class FailingReadStream : Stream
+    {
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new IOException("simulated mid-stream failure");
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<int>(new IOException("simulated mid-stream failure"));
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
     public void DownloadAsync_PreCancelledTokenReturnsFailure()
     {
         var check = CheckWithAssets();
