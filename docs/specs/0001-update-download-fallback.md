@@ -23,30 +23,32 @@ fallback is a single attempt per asset and a rate-limit response becomes a norma
 
 ## Acceptance criteria
 
-- [ ] **AC-1**: `BuildApiAssetUri(assetId)` returns
+- [x] **AC-1**: `BuildApiAssetUri(assetId)` returns
       `https://api.github.com/repos/Folieson/itsycal-for-windows/releases/assets/{assetId}`.
-- [ ] **AC-2**: `ShouldRetryViaApi` returns true for transport failures (no status), 5xx,
-      429 and 403; false for 2xx, 400/401/404 and 408 (408 is treated as a client error, not
-      retried).
-- [ ] **AC-3**: `ParseReleases` reads the numeric `id` of each asset into
+- [x] **AC-2**: `ShouldRetryViaApi` returns true for transport failures (no status),
+      request timeouts surfaced while the caller token is live, 5xx, 429 and 403; false for
+      2xx, 400/401/404 and 408 (408 is treated as a client error, not retried).
+- [x] **AC-3**: `ParseReleases` reads the numeric `id` of each asset into
       `ReleaseAsset.AssetId`; an asset without an id keeps `AssetId == 0`.
-- [ ] **AC-4**: `DownloadAsync` downloads **both** `SHA256SUMS.txt` and the MSIX browser
-      first. When a browser download fails with a retryable error (AC-2) and the asset has a
+- [x] **AC-4**: `DownloadAsync` downloads **both** `SHA256SUMS.txt` and the MSIX browser
+      first. When a browser download fails with a retryable error (AC-2, including an
+      `HttpClient` timeout or a response stream that dies mid-download) and the asset has a
       nonzero id, the same asset is retried exactly once through the API endpoint with
       `Accept: application/octet-stream`. No retry loop is added. A failed fallback returns a
       normal failed result (never throws) and leaves no partial file behind.
-- [ ] **AC-5**: When the browser download succeeds, exactly one request per asset is made
+- [x] **AC-5**: When the browser download succeeds, exactly one request per asset is made
       (checksum + MSIX, two requests total), no API request is made, and the existing paths
       and success/failure messages are unchanged.
-- [ ] **AC-6**: A checksum asset without an id is never retried through the API; a failed
+- [x] **AC-6**: A checksum asset without an id is never retried through the API; a failed
       checksum download fails the whole update before the MSIX is requested (fail closed).
-- [ ] **AC-7**: The MSIX is only used after its SHA256 matches the checksum file; a mismatch
+- [x] **AC-7**: The MSIX is only used after its SHA256 matches the checksum file; a mismatch
       discards the download and fails the update. The asset name is reduced to a plain file
       name before writing, so an asset name containing path separators cannot write outside
       `%LOCALAPPDATA%\ItsycalForWindows\updates\<tag>\`.
-- [ ] **AC-8**: A cancelled or timed-out download returns a failed result (never throws), does
-      not attempt the API fallback, and does not leave the temporary file in place.
-- [ ] **AC-9**: An API rate-limit or error response (403/429/5xx) after the fallback attempt
+- [x] **AC-8**: A user cancellation returns a failed result (never throws), never attempts the
+      API fallback, and leaves no temporary file in place. Timeouts are not user cancellations:
+      they are retried through the API fallback (AC-2/AC-4).
+- [x] **AC-9**: An API rate-limit or error response (403/429/5xx) after the fallback attempt
       becomes a normal failed result with a user-presentable message; no storm of retries.
 
 ## Test plan (TDD order)
@@ -58,6 +60,7 @@ fallback is a single attempt per asset and a rate-limit response becomes a norma
 | AC-3 | `UpdateLogicTests.ParseReleases_ReadsAssetIds` | unit |
 | AC-4 | `UpdateLogicTests.DownloadAsync_FallsBackToApiForChecksumAndMsix` (fake `HttpMessageHandler`, temp data folder: 4 requests in order, API requests carry octet-stream, SHA verified) | unit |
 | AC-4/AC-9 | `UpdateLogicTests.DownloadAsync_FailedApiFallbackReturnsFailureWithoutThrowing` | unit |
+| AC-2/AC-4 | `UpdateLogicTests.DownloadAsync_TimeoutFallsBackToApi` | unit |
 | AC-5 | `UpdateLogicTests.DownloadAsync_BrowserOnlySendsOneRequestPerAsset` | unit |
 | AC-6 | `UpdateLogicTests.DownloadAsync_MissingChecksumAssetIdFailsClosed` | unit |
 | AC-7 | `UpdateLogicTests.DownloadAsync_TamperedMsixFailsClosed` + `DownloadAsync_TraversalAssetNameStaysInsideUpdatesFolder` | unit |
@@ -96,4 +99,8 @@ Manual verification is a deliberate complement, not a substitute for the unit te
   definitions (M1/M2), cancellation (M3), rate limits (M4), asset-name safety (M5), retroactive
   context correction (M6), manual evidence moved into this spec (M7), ADR link and structure
   (m1/m5).
-- Code review: requested on the revised implementation PR (#30).
+- Code review (independent, read-only): 2026-11-08, verdict **request changes** on the
+  original implementation (#27). Addressed in PR #30: `HttpMessageHandler` + data-folder test
+  seam with download-level tests (AC-4/5/6/7/8), timeout and mid-stream transport fallback,
+  raw coverage comparison, `coverlet.collector` in THIRD-PARTY-NOTICES, corrected CI ordering
+  wording and honest red-run wording. Re-review requested on PR #30.

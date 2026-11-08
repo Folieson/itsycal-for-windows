@@ -220,6 +220,8 @@ internal sealed class UpdateService
     /// </summary>
     internal const string ApiAssetUrlFormat = "https://api.github.com/repos/{0}/releases/assets/{1}";
 
+    private static readonly CompositeFormat ApiAssetUriFormat = CompositeFormat.Parse(ApiAssetUrlFormat);
+
     /// <summary>GitHub REST endpoint listing the newest releases.</summary>
     internal const string ReleasesUrl = "https://api.github.com/repos/Folieson/itsycal-for-windows/releases?per_page=10";
 
@@ -934,7 +936,7 @@ internal sealed class UpdateService
     /// <param name="assetId">Numeric id from the release JSON.</param>
     internal static Uri BuildApiAssetUri(long assetId) => new(string.Format(
         CultureInfo.InvariantCulture,
-        ApiAssetUrlFormat,
+        ApiAssetUriFormat,
         RepositorySlug,
         assetId));
 
@@ -956,13 +958,38 @@ internal sealed class UpdateService
     internal static bool CanRetryViaApi(long assetId, HttpStatusCode? statusCode) =>
         assetId > 0 && ShouldRetryViaApi(statusCode);
 
+    /// <summary>
+    /// True when a failed browser download should be retried through the API asset endpoint:
+    /// HTTP errors classified by <see cref="ShouldRetryViaApi"/>, request timeouts surfaced as
+    /// <see cref="OperationCanceledException"/> while the caller token is still live, and
+    /// transport failures while reading the response body. A user cancellation is never retried.
+    /// </summary>
+    /// <param name="assetId">Numeric release-asset id; zero disables the fallback.</param>
+    /// <param name="exception">Exception raised by the browser download attempt.</param>
+    /// <param name="cancellationToken">Caller token; a requested cancellation disables the fallback.</param>
+    internal static bool ShouldFallbackToApi(long assetId, Exception exception, CancellationToken cancellationToken)
+    {
+        if (assetId <= 0 || cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        return exception switch
+        {
+            HttpRequestException http => ShouldRetryViaApi(http.StatusCode),
+            OperationCanceledException => true, // HttpClient timeout, not a user cancellation
+            IOException => true, // response stream died mid-download
+            _ => false,
+        };
+    }
+
     private async Task DownloadFileAsync(Uri uri, long assetId, string path, CancellationToken cancellationToken)
     {
         try
         {
             await DownloadFileFromUriAsync(uri, path, cancellationToken).ConfigureAwait(false);
         }
-        catch (HttpRequestException exception) when (CanRetryViaApi(assetId, exception.StatusCode))
+        catch (Exception exception) when (ShouldFallbackToApi(assetId, exception, cancellationToken))
         {
             await DownloadFileFromApiAsync(assetId, path, cancellationToken).ConfigureAwait(false);
         }

@@ -451,10 +451,9 @@ public sealed class UpdateLogicTests
     public void DownloadAsync_BrowserOnlySendsOneRequestPerAsset()
     {
         var check = CheckWithAssets();
-        var sumsName = check.Assets.Single(asset => asset.Name == "SHA256SUMS.txt").Name;
         var (service, folder, handler) = NewService(request =>
             request.RequestUri!.AbsolutePath.Contains("SHA256SUMS.txt", StringComparison.Ordinal)
-                ? Ok(SumsBytes(sumsName))
+                ? Ok(SumsBytes(MsixName))
                 : Ok(MsixBytes));
 
         try
@@ -477,7 +476,6 @@ public sealed class UpdateLogicTests
     public void DownloadAsync_FallsBackToApiForChecksumAndMsix()
     {
         var check = CheckWithAssets();
-        var sumsName = check.Assets.Single(asset => asset.Name == "SHA256SUMS.txt").Name;
         var (service, folder, handler) = NewService(request =>
         {
             if (request.RequestUri!.Host == "github.com")
@@ -488,7 +486,7 @@ public sealed class UpdateLogicTests
             Assert.Equal("api.github.com", request.RequestUri.Host);
             Assert.Contains(request.Headers.Accept, value => value.MediaType == "application/octet-stream");
             return request.RequestUri.AbsolutePath.Contains("/assets/7", StringComparison.Ordinal)
-                ? Ok(SumsBytes(sumsName))
+                ? Ok(SumsBytes(MsixName))
                 : Ok(MsixBytes);
         });
 
@@ -560,8 +558,7 @@ public sealed class UpdateLogicTests
     public void DownloadAsync_TamperedMsixFailsClosed()
     {
         var check = CheckWithAssets();
-        var sumsName = check.Assets.Single(asset => asset.Name == "SHA256SUMS.txt").Name;
-        var wrongSums = Encoding.UTF8.GetBytes(new string('0', 64) + "  " + sumsName + Environment.NewLine);
+        var wrongSums = Encoding.UTF8.GetBytes(new string('0', 64) + "  " + MsixName + Environment.NewLine);
         var (service, folder, handler) = NewService(request =>
             request.RequestUri!.AbsolutePath.Contains("SHA256SUMS.txt", StringComparison.Ordinal)
                 ? Ok(wrongSums)
@@ -587,7 +584,6 @@ public sealed class UpdateLogicTests
     {
         const string hostileName = "..\\..\\evil_x64.msix";
         var check = CheckWithAssets(msixName: hostileName);
-        var sumsName = check.Assets.Single(asset => asset.Name == "SHA256SUMS.txt").Name;
         var (service, folder, handler) = NewService(request =>
             request.RequestUri!.AbsolutePath.Contains("SHA256SUMS.txt", StringComparison.Ordinal)
                 ? Ok(SumsBytes(hostileName))
@@ -601,6 +597,34 @@ public sealed class UpdateLogicTests
             Assert.Equal("evil_x64.msix", Path.GetFileName(result.MsixPath));
             Assert.StartsWith(Path.GetFullPath(folder), Path.GetFullPath(result.MsixPath!), StringComparison.OrdinalIgnoreCase);
             Assert.False(File.Exists(Path.Combine(folder, "evil_x64.msix")));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+
+    [Fact]
+    public void DownloadAsync_TimeoutFallsBackToApi()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(request =>
+        {
+            if (request.RequestUri!.Host == "github.com")
+            {
+                throw new TaskCanceledException("simulated HttpClient timeout");
+            }
+
+            return request.RequestUri.AbsolutePath.Contains("/assets/7", StringComparison.Ordinal)
+                ? Ok(SumsBytes(MsixName))
+                : Ok(MsixBytes);
+        });
+
+        try
+        {
+            var result = service.DownloadAsync(check, UpdateArchitecture.X64).GetAwaiter().GetResult();
+
+            Assert.True(result.Success, result.Message);
         }
         finally
         {
@@ -630,12 +654,14 @@ public sealed class UpdateLogicTests
         }
     }
 
+    private const string MsixName = "ItsycalForWindows_1.2.1.0_x64.msix";
+
     private static readonly byte[] MsixBytes = Encoding.UTF8.GetBytes("fake-msix-content");
 
     private static UpdateCheckResult CheckWithAssets(
         long sumsId = 7,
         long msixId = 11,
-        string msixName = "ItsycalForWindows_1.2.1.0_x64.msix")
+        string msixName = MsixName)
     {
         var sumsUri = new Uri("https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/SHA256SUMS.txt");
         var msixUri = new Uri("https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/evil_x64.msix");
@@ -658,7 +684,7 @@ public sealed class UpdateLogicTests
     private static byte[] SumsBytes(string msixName) =>
         Encoding.UTF8.GetBytes(
             Convert.ToHexString(SHA256.HashData(MsixBytes)).ToLowerInvariant()
-            + "  " + msixName + Environment.NewLine);
+            + "  " + Path.GetFileName(msixName) + Environment.NewLine);
 
     private static HttpResponseMessage Ok(byte[] content) =>
         new(HttpStatusCode.OK) { Content = new ByteArrayContent(content) };

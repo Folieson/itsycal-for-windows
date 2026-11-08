@@ -78,24 +78,24 @@ jobs:
       - name: Enforce the coverage floor
         shell: pwsh
         run: |
-          $coverage = Get-ChildItem 'windows/artifacts/coverage' -Recurse -Filter 'coverage.cobertura.xml' -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-          if (-not $coverage) {
-            Write-Error 'No coverage.cobertura.xml was produced by the test run.'
+          $coverage = @(Get-ChildItem 'windows/artifacts/coverage' -Recurse -Filter 'coverage.cobertura.xml' -ErrorAction SilentlyContinue)
+          if ($coverage.Count -ne 1) {
+            Write-Error "Expected exactly one coverage.cobertura.xml, found $($coverage.Count)."
             exit 1
           }
 
-          [xml]$document = Get-Content -LiteralPath $coverage.FullName -Raw
+          [xml]$document = Get-Content -LiteralPath $coverage[0].FullName -Raw
           $lineRate = [double]::Parse($document.coverage.'line-rate', [System.Globalization.CultureInfo]::InvariantCulture)
-          $percent = [math]::Round($lineRate * 100, 1)
+          $rawPercent = $lineRate * 100
+          $percent = [math]::Round($rawPercent, 1)
           $floor = 30.0
 
           "### Code coverage" >> $env:GITHUB_STEP_SUMMARY
           "Line coverage: **$percent%** (floor: $floor%; baseline 2026-11-08 was 30.7%. Raise the floor as tests are added, never lower it without a documented reason.)" >> $env:GITHUB_STEP_SUMMARY
-          "Report: $($coverage.FullName)" >> $env:GITHUB_STEP_SUMMARY
+          "Report: $($coverage[0].FullName)" >> $env:GITHUB_STEP_SUMMARY
           Write-Host "Line coverage: $percent% (floor: $floor%)"
 
-          if ($percent -lt $floor) {
+          if ($rawPercent -lt $floor) {
             Write-Error "Line coverage $percent% is below the $floor% floor. Add tests or adjust the floor with a documented reason."
             exit 1
           }

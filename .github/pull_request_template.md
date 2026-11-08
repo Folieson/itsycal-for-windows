@@ -6,7 +6,7 @@
 
 - Spec: <!-- docs/specs/NNNN-... or "no behaviour change: ..." -->
 - [ ] Every acceptance criterion in the spec maps to a test (or a documented manual check).
-- [ ] The new tests failed before the implementation (show the red run locally or in a draft PR).
+- [ ] The new tests cover the acceptance criteria; when the local toolchain allows, a red run is attached, otherwise the PR says why CI-only was used.
 - [ ] CI coverage floor passes and coverage did not decrease in the touched files.
 
 ## Independent reviews

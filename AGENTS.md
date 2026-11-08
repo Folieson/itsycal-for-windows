@@ -73,8 +73,7 @@ dotnet test windows/tests/ItsycalForWindows.Tests.csproj -c Debug --collect:"XPl
 ```
 
 CI (`.github/workflows/windows-build.yml`) runs the same test command, enforces a line
-coverage floor from the Cobertura report and uploads the report as an artifact; MSIX
-packaging and signing run after the tests.
+coverage floor from the Cobertura report and uploads the report as an artifact; MSIX packaging runs before the tests and signing runs after them.
 
 Public releases are signed MSIX packages built per architecture by
 `windows/scripts/Build-Release.ps1`. Command Palette discovers extensions only through the
