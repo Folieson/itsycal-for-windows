@@ -11,6 +11,7 @@ the release workflow reads it to build the GitHub release notes.
 
 - Backlog and the compact calendar UI specification (`docs/BACKLOG.md`,
   `docs/specs/0003-compact-calendar-ui.md`).
+- PO decision (ADR 0003): hybrid surfaces — standalone WinUI 3 tray flyout becomes the primary compact UI, CmdPal extension remains optional, custom bottom dock rejected; spec 0004 drafted.
 - Changelog discipline for releases.
 - Independent design-review gate for UI changes (installed-build screenshots, host-aware
   compactness/typography/states, host acrylic translucency without opaque panels or fake alpha).

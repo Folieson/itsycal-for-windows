@@ -1,6 +1,6 @@
 # 0003 — Compact calendar flyout (ItsyCal-like composition)
 
-Status: proposed (P0 UI epic, PO decision 2026-11-08; revised after independent spec review)
+Status: proposed, **CmdPal-surface only** — the primary compact UI moved to spec 0004 / ADR 0003 (PO hybrid decision 2026-11-08); this spec covers the optional PowerToys Command Palette surface and its host limitations.
 Backlog: [UI-101 / UI-102](../BACKLOG.md)
 Related: PR #33 (details/Join groundwork), PR #36 (v1.2.2), ADR 0002
 Reference: original ItsyCal [product page](https://www.mowglii.com/itsycal/) and
