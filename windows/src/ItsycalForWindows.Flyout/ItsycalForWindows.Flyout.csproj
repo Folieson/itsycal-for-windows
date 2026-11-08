@@ -3,7 +3,13 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
-    <TargetPlatformMinVersion>10.0.26100.0</TargetPlatformMinVersion>
+    <!-- Supported OS floor: Windows 10 version 2004 (build 19041), not the Windows 11 24H2
+         SDK used to compile. Windows App SDK 2.6 projects to net6.0-windows10.0.17763.0 and
+         WinUI 3 requires 17763+, so nothing in the flyout needs 26100. The 26100 targeting
+         pack stays (WindowsSdkPackageVersion) because that is what the build machine has;
+         only the runtime contract is lowered. Windows 11-only visuals (DWM rounded corners,
+         acrylic) degrade to their documented fallbacks on older systems. -->
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>ItsycalForWindows.Flyout</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Platforms>x64;ARM64</Platforms>

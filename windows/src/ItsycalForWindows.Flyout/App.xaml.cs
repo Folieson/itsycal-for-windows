@@ -1,20 +1,32 @@
 using System;
-using System.IO;
 using Microsoft.UI.Xaml;
 
 namespace ItsycalForWindows.Flyout;
 
 public partial class App : Application
 {
-    private MainWindow? _window;
+    private SingleInstance? _singleInstance;
 
     public App()
     {
-        // A failed XAML load otherwise fails fast with an opaque stowed exception, so keep a
-        // small crash log next to the executable. Written only when something goes wrong.
-        UnhandledException += (_, e) => DiagnosticLog.Write("UnhandledException: " + e.Exception);
+        // A failed XAML load otherwise fails fast with an opaque stowed exception. Crash
+        // diagnostics stay enabled in Release: one line, capped, under %LOCALAPPDATA%.
+        UnhandledException += (_, e) => DiagnosticLog.WriteCrash("XAML", e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-            DiagnosticLog.Write("AppDomain.UnhandledException: " + e.ExceptionObject);
+            DiagnosticLog.WriteCrash("AppDomain", e.ExceptionObject as Exception);
+
+        // Single instance must be decided before any XAML/window/tray object exists. A second
+        // launch signals the owner and exits; it never creates a second window or tray icon.
+        _singleInstance = SingleInstance.TryAcquire(out var alreadyRunning);
+        if (_singleInstance is null && alreadyRunning)
+        {
+            SingleInstance.SignalExistingInstance();
+            DiagnosticLog.Write("SINGLE result=secondary-exit");
+            Environment.Exit(0);
+            return;
+        }
+
+        DiagnosticLog.Write($"SINGLE result={(_singleInstance is null ? "degraded" : "primary")}");
 
         // Evidence hook: the design review needs a light-theme capture while the host runs dark.
         // Application.RequestedTheme is only settable before the first window is created.
@@ -29,35 +41,29 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
-        _window.Activate();
-    }
-}
+        var window = new MainWindow();
 
-/// <summary>
-/// Spike-only crash diagnostics: a startup failure without a debugger is otherwise
-/// indistinguishable from a native fail-fast.
-/// </summary>
-internal static class DiagnosticLog
-{
-    private static readonly object Sync = new();
-    private static readonly string Path =
-        System.IO.Path.Combine(
-            Environment.GetEnvironmentVariable("ITSYCAL_FLYOUT_LOG_DIR") ?? AppContext.BaseDirectory,
-            "itsycal-flyout.log");
+        // Wired after construction so a wake-up that lands during startup is replayed once the
+        // window exists (the named event is auto-reset and must not be lost).
+        _singleInstance?.SetShowHandler(() =>
+        {
+            DiagnosticLog.Write("SINGLE show-requested");
+            window.DispatcherQueue.TryEnqueue(window.ShowFlyout);
+        });
 
-    public static void Write(string message)
-    {
-        try
+        // Hidden start is the production behaviour when the tray icon is available. The
+        // screenshot workflow sets ITSYCAL_FLYOUT_STAY_VISIBLE=1, and a failed tray
+        // registration keeps the window visible so there is always a way to use and quit it.
+        if (window.ShouldStartVisible)
         {
-            lock (Sync)
-            {
-                File.AppendAllText(Path, $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}");
-            }
+            window.ShowFlyout();
         }
-        catch
+
+        window.Closed += (_, _) =>
         {
-            // Diagnostics must never break the app.
-        }
+            window.Dispose();
+            _singleInstance?.Dispose();
+            _singleInstance = null;
+        };
     }
 }

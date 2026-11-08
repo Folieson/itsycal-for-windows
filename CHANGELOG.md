@@ -9,6 +9,10 @@ the release workflow reads it to build the GitHub release notes.
 
 ### Added
 
+- Launch and usage UX planning: [spec 0007](docs/specs/0007-launch-and-usage-ux.md) covers cold start
+  and first run, the launch-path matrix, daily use, provider/account setup, the settings surface, the
+  state/error copy matrix and exit/uninstall/v2.0 migration, with UX-101…UX-105 backlog rows. UX only —
+  no behaviour change.
 - PO-approved Calwren mark **Fluent Binding** and its production asset pack under
   `assets/branding/calwren/` (app/Store tiles, tray 16–48, `.ico`, wordmark, lockup, source
   SVGs, proofs). The user-visible rename and package identity change happen at v2.0.0.
@@ -19,6 +23,15 @@ the release workflow reads it to build the GitHub release notes.
   surface and spec 0004 for the primary standalone flyout (`docs/BACKLOG.md`,
   `docs/specs/`).
 - PO decision (ADR 0003): hybrid surfaces — standalone WinUI 3 tray flyout becomes the primary compact UI, CmdPal extension remains optional, custom bottom dock rejected; specs 0004 (primary) and 0003 (optional) in independent review.
+- PO decision (2026-11-08): the optional Command Palette surface **adapts to the primary
+  flyout's visual and interaction language** — same composition and agenda → inline-details
+  hierarchy, neutral row anatomy, accent discipline, typography/spacing rhythm and
+  acrylic-forward surfaces within the verified Adaptive Cards 1.5 host limits
+  ([spec 0003](docs/specs/0003-compact-calendar-ui.md) rev 5,
+  [ADR 0003](docs/adr/0003-surfaces-and-host-strategy.md); backlog UI-105/UI-106, P1). Host-owned
+  limits (window, material strength, button metrics, UIA/keyboard gaps) are not permission to
+  diverge; an achievable visual/interaction difference is a defect. Spec review pending; no
+  implementation yet.
 - PO decision (ADR 0004): the v2.0.0 name is **Calwren** (Cal + wren), chosen by the PO with a
   warm, calm, minimalist wren-on-a-calendar-row brand direction, a terracotta/amber accent on
   neutral, a lowercase `calwren` wordmark and the descriptor `Calwren — calendar for Windows`
@@ -33,6 +46,8 @@ the release workflow reads it to build the GitHub release notes.
   compactness/typography/states, host acrylic translucency without opaque panels or fake alpha).
 
 ### Changed
+
+- Hardened the standalone flyout: privacy-safe diagnostic logging (no event content/links; crash log under `%LOCALAPPDATA%\Calwren\logs`), http/https-only meeting links with normalized copy, tray/hotkey recovery, a quit path when the tray is unavailable, deferred light-dismiss toggle, tray/cursor-monitor positioning with DPI re-layout, single-instance activation, hidden taskbar startup and a Windows 10 2004 support floor; CI now verifies the self-contained runtime/PRI alias and smoke-launches the artifact.
 
 - Revised both compact-UI specs after the round-3 independent spec review. Spec 0003 was
   rescoped to the optional CmdPal surface: the impossible no-scroll criterion is deleted, the
@@ -56,8 +71,16 @@ the release workflow reads it to build the GitHub release notes.
   Acceptance still requires re-measurement on the installed MSIX with the committed fixture.
   Spec revision bumped to 4 (revision 3 was approved with notes in docs PR #37; the amendment's
   re-review is pending).
-- Backlog: UI-105 added for optional CmdPal surface polish; ARCH-802 and the UI-101/102 status
-  reflect the merged `ItsycalForWindows.Core` (models + providers) and spec 0004 revision 4.
+- Backlog: UI-105 added for the CmdPal surface (re-scoped to parity by the revision-5 entry
+  above); ARCH-802 and the UI-101/102 status reflect the merged `ItsycalForWindows.Core`
+  (models + providers) and spec 0004 revision 4.
+- Revised spec 0003 to revision 5 with the Command Palette parity mandate: the CmdPal card
+  follows the flyout's composition (month header/navigation, compact agenda header, six week
+  rows, neutral row anatomy, inline details directly under the selected row), reserves accent
+  for the selected day/today and the Join primary action, adds the typography/spacing/surface
+  token map (AC-8), pure Adaptive-Card JSON tests (AC-6) and a documented host-limit/NOT-defect
+  list. Backlog UI-105 moved to P1 and UI-106 added; ADR 0003 and the roadmap record that
+  "optional surface" does not mean divergent UI; independent spec review pending.
 
 ## [1.2.2] - 2026-11-08
 
@@ -70,6 +93,7 @@ the release workflow reads it to build the GitHub release notes.
   notes work for store events.
 
 ### Changed
+
 
 - Automatic update checks are now opt-in (off by default), matching the privacy policy.
 - Development builds derive their package version from the newest release tag
@@ -86,7 +110,6 @@ the release workflow reads it to build the GitHub release notes.
   429 and 403; user cancellation never triggers a fallback.
 - Trusted signing: `SIGNING.md` names `TRUSTED_SIGNING_PFX_*`, and the release workflow
   fails instead of silently producing a dev-signed build when trusted mode is requested.
-
 ## [1.2.1] - 2026-11-07
 
 ### Added

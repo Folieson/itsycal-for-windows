@@ -1,8 +1,8 @@
 # ADR 0003 — Surfaces: hybrid standalone flyout + Command Palette extension
 
 Status: accepted (PO decision 2026-11-08)
-Surface status (2026-11-08): primary = spec 0004 (revision 3, re-review pending); optional CmdPal
-surface = spec 0003 (revision 4, re-review pending, explicitly host-limited).
+Surface status (2026-11-08): primary = spec 0004 (revision 4, re-review pending); optional CmdPal
+surface = spec 0003 (revision 5, parity mandate, independent review pending).
 Supersedes: nothing. Amends the surface plan in `docs/ROADMAP.md` and spec 0003.
 
 ## Context
@@ -32,11 +32,16 @@ WinUI 3 tray application as the primary compact UI.
    light-dismiss, multi-monitor/DPI aware, keyboard-accessible. No taskbar injection, no
    custom bottom dock.
 2. **Secondary surface:** keep the existing PowerToys Command Palette extension (calendar
-   page, dock band, commands) as an optional integration for CmdPal users. It follows the
-   CmdPal host constraints; its spec (0003) is explicitly scoped to what the host allows and
-   descopes criteria it cannot meet (narrow window, no-scroll long details, per-element UIA/
-   arrow focus) instead of claiming parity with the primary flyout. The compact, no-scroll
-   primary experience is owned by spec 0004.
+   page, dock band, commands) as an optional integration for CmdPal users. Optional in
+   distribution does not mean divergent UI: the card follows the primary flyout's design
+   language and interaction hierarchy — month header/navigation → six week rows → compact
+   agenda header → agenda rows → inline details under the selected row, neutral row anatomy,
+   accent discipline, typography/spacing tokens and acrylic-forward surfaces — as far as the
+   Adaptive Cards 1.5 host allows. Spec 0003 revision 5 carries the parity mandate. Only
+   host-owned limits are descoped (window width/position, material strength, no-scroll long
+   details, nested row actions, per-element UIA names and full keyboard/arrow focus); a visual
+   or interaction difference the card can express is a defect. The compact, no-scroll primary
+   experience is owned by spec 0004, and scrolling is accepted on the CmdPal surface.
 3. **Shared core:** extract calendar domain/providers/update/settings into a shared library
    (`ItsycalForWindows.Core`) used by both surfaces. No provider logic is duplicated. The
    Windows appointment store, ICS folder, update service and settings stay in the core.
@@ -55,8 +60,9 @@ accessibility; no PowerToys dependency for the core experience; CmdPal users kee
 Negative: two shells to build/test/release; standalone needs tray icon, hotkey, autostart,
 single-instance and multi-monitor handling, plus its own install/upgrade UX; the shared-core
 extraction is a real refactor with regression risk; two MSIX identities to sign/update. The
-optional CmdPal surface cannot match the primary flyout's compactness, so it is documented as
-host-limited rather than marketed as equivalent.
+optional CmdPal surface cannot match the primary flyout's window geometry, material control or
+compactness; those are documented host limits, but the CmdPal card still follows the flyout's
+design language and interaction hierarchy, so "optional" is not an excuse for divergent UI.
 
 Neutral: the existing palette extension, its tests and CI remain; the standalone app adds a
 new project/test target and a second artifact to the release.
@@ -68,10 +74,11 @@ new project/test target and a second artifact to the release.
    on an installed MSIX (screenshots) before production work.
 3. Extract `ItsycalForWindows.Core` incrementally behind tests; the CmdPal extension switches
    to the core first, then the standalone app consumes it.
-4. Build the standalone flyout UI (spec 0004) with design review. The optional CmdPal
-   compactness work in spec 0003 is not on the critical path: keep the extension working and
-   shared-core compatible, and implement 0003 only if the PO still wants that optional surface
-   polished.
+4. Build the standalone flyout UI (spec 0004) with design review, then implement the CmdPal
+   parity contract (spec 0003 revision 5, UI-105/UI-106) against that accepted visual language so
+   both surfaces share one design. Keep the extension working and shared-core compatible in the
+   meantime. CmdPal parity is P1 and follows the flyout's visuals; it is not optional polish,
+   but it is also not on the provider/Store critical path.
 5. Package/sign/release both; update WinGet and README; changelog per surface.
 
 ## Alternatives considered
@@ -86,8 +93,9 @@ new project/test target and a second artifact to the release.
 
 ## References
 
-- Host limits: `docs/specs/0003-compact-calendar-ui.md` (optional CmdPal surface), PowerToys
-  `MainWindow.xaml` (800×480/640×420) and `TransientSurface.xaml` (host acrylic).
+- Host limits and the parity contract: `docs/specs/0003-compact-calendar-ui.md`
+  (parity-mandated CmdPal surface; host limits are listed there), PowerToys `MainWindow.xaml`
+  (800×480/640×420) and `TransientSurface.xaml` (host acrylic).
 - Primary surface: `docs/specs/0004-standalone-compact-flyout.md` (WinUI 3 tray flyout).
 - Windows 11 widgets: https://learn.microsoft.com/en-us/samples/microsoft/windowsappsdk-samples/widgets/
 - WinUI 3 tray pattern: https://github.com/mehdimyadi/systemtraywinui3
