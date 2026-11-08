@@ -102,7 +102,7 @@ builds, packages and tests every PR.
 ## Branching
 
 - Start every branch from a freshly fetched `master`: `git switch master && git pull --ff-only && git switch -c <type>/<slug>`. Never branch from another feature branch.
-- Before opening a PR, run `git diff master...HEAD --stat` and confirm it contains only this change. If another PR's commits appear, the branch is stacked: rebase or cherry-pick onto `master` and re-verify.
+- Before opening a PR, run `git diff master...HEAD --stat` and confirm it contains only this change. If another PR's commits appear, the branch is stacked: recreate it from `master` and cherry-pick only its own commits (`git rebase --onto master <other-branch> <your-branch>`), then re-verify.
 - Never stack branches.
 
 ## Commits and PRs

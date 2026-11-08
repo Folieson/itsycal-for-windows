@@ -1,8 +1,8 @@
 # 0001 — Robust update download via the GitHub API asset endpoint
 
-Status: implementation merged in #27; spec revised after an independent spec review
-(request changes) in #30.
-Related: [ADR 0002](../adr/0002-calendar-providers-and-network.md), PR #27, PR #30.
+Status: implementation merged (landed on master via #27/#31); spec revised after an independent
+spec review (request changes); follow-up fixes in #32.
+Related: [ADR 0002](../adr/0002-calendar-providers-and-network.md), PR #27, #30, #31, #32.
 
 ## Context
 
@@ -51,6 +51,10 @@ fallback is a single attempt per asset and a rate-limit response becomes a norma
       they are retried through the API fallback (AC-2/AC-4).
 - [x] **AC-9**: An API rate-limit or error response (403/429/5xx) after the fallback attempt
       becomes a normal failed result with a user-presentable message; no storm of retries.
+- [x] **AC-10**: A failed checksum download leaves no partial `SHA256SUMS.txt` or
+      `SHA256SUMS.txt.download` behind. The checksum is written to a temporary file and moved
+      into place only after the download succeeds; an existing checksum file is not truncated
+      in place on failure.
 
 ## Test plan (TDD order)
 
@@ -65,7 +69,9 @@ fallback is a single attempt per asset and a rate-limit response becomes a norma
 | AC-5 | `UpdateLogicTests.DownloadAsync_BrowserOnlySendsOneRequestPerAsset` | unit |
 | AC-6 | `UpdateLogicTests.DownloadAsync_MissingChecksumAssetIdFailsClosed` | unit |
 | AC-7 | `UpdateLogicTests.DownloadAsync_TamperedMsixFailsClosed` + `DownloadAsync_TraversalAssetNameStaysInsideUpdatesFolder` | unit |
-| AC-8 | `UpdateLogicTests.DownloadAsync_PreCancelledTokenReturnsFailure` | unit |
+| AC-8 | `UpdateLogicTests.DownloadAsync_PreCancelledTokenReturnsFailure` + `..._PreCancelledTokenNeverFallsBackToApi` | unit |
+| AC-4 | `UpdateLogicTests.DownloadAsync_MidStreamIOExceptionFallsBackToApi` | unit |
+| AC-10 | `UpdateLogicTests.DownloadAsync_FailedChecksumDownloadLeavesNoPartialFile` | unit |
 | AC-9 | covered by AC-4/AC-2 units; API failure is a normal failed result | unit |
 | - | live fallback on a proxy-blocked network (manual record below) | manual |
 

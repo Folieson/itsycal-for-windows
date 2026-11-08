@@ -545,6 +545,29 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
+    public async Task DownloadAsync_FailedChecksumDownloadLeavesNoPartialFile()
+    {
+        var check = CheckWithAssets();
+        var (service, folder, handler) = NewService(request =>
+            request.RequestUri!.Host == "github.com"
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new FailingReadContent() }
+                : Status(HttpStatusCode.InternalServerError));
+
+        try
+        {
+            var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
+
+            Assert.False(result.Success);
+            Assert.Equal(2, handler.Requests.Count);
+            Assert.Empty(Directory.GetFiles(folder, "SHA256SUMS*", SearchOption.AllDirectories));
+            Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            DeleteFolder(folder);
+        }
+    }
+    [Fact]
     public async Task DownloadAsync_TamperedMsixFailsClosed()
     {
         var check = CheckWithAssets();
@@ -643,7 +666,11 @@ public sealed class UpdateLogicTests
             var result = await service.DownloadAsync(check, UpdateArchitecture.X64);
 
             Assert.True(result.Success, result.Message);
-            Assert.Contains(handler.Requests, request => request.RequestUri!.Host == "api.github.com");
+            Assert.Equal(4, handler.Requests.Count);
+            Assert.Equal(
+                new[] { "github.com", "api.github.com", "github.com", "api.github.com" },
+                handler.Requests.Select(request => request.RequestUri!.Host));
+            Assert.Contains(handler.Requests[1].Headers.Accept, value => value.MediaType == "application/octet-stream");
         }
         finally
         {
@@ -665,6 +692,7 @@ public sealed class UpdateLogicTests
 
             Assert.False(result.Success);
             Assert.DoesNotContain(handler.Requests, request => request.RequestUri!.Host == "api.github.com");
+            Assert.Empty(Directory.GetFiles(folder, "*.download", SearchOption.AllDirectories));
         }
         finally
         {
