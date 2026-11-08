@@ -34,7 +34,7 @@ fork relation is kept for attribution and history, not for shared code.
 - **Private by design** — no telemetry and no event content in logs. Network access is
   limited to self-update checks you enable and, in future, remote calendar providers you
   configure. Automatic update checks are **off** by default; the first check happens when
-  you run the check command or enable the setting.
+  you run the check command, or on the next launch after enabling the setting.
 
 ## Requirements
 
@@ -55,7 +55,8 @@ that is self-contained:
    download the newest x64 (or arm64) MSIX together with its matching `_dev.cer`.
 2. From an **elevated** PowerShell, trust the development certificate once and register the
    package (the certificate subject must match the package publisher,
-   `CN=ItsycalForWindows-Dev`; the signer thumbprint is printed in the release workflow log):
+   `CN=ItsycalForWindows-Dev`; the release also attaches the `_dev.cer` that signed the package — verify it with
+   `Get-AuthenticodeSignature .\ItsycalForWindows_<version>_x64.msix`):
 
    ```powershell
    Import-Certificate -FilePath .\ItsycalForWindows_<version>_dev.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
@@ -64,8 +65,8 @@ that is self-contained:
 
 3. Open **Command Palette → Dock settings**, add the **Itsycal for Windows** band.
 4. Add events: drop exported `.ics` files into
-   `%LOCALAPPDATA%\ItsycalForWindows\calendars\` (the folder is created on first read; use
-   `Itsycal: open calendar folder` once available, or open it in Explorer).
+   `%LOCALAPPDATA%\ItsycalForWindows\calendars\` (the folder is created on first read; open it in
+   Explorer).
 
 The build is a pre-release because it is signed with a development certificate.
 `winget install Folieson.ItsycalForWindows` becomes the primary path once a trusted
