@@ -1,7 +1,8 @@
 # 0004 — Standalone compact flyout (primary surface)
 
-Status: proposed — **primary compact surface**; draft revision 3 (2026-11-08). Independent
-spec review round 3 returned request changes; revision 3 resolves them and awaits re-review.
+Status: proposed — **primary compact surface**; draft revision 3 (2026-11-08) with the
+measured collapsed-height amendment. Independent spec review round 3 returned request changes;
+revision 3 resolves them and awaits re-review.
 Backlog: ARCH-801/802, UI-101/102 (see [BACKLOG.md](../BACKLOG.md))
 Related: [ADR 0003](../adr/0003-surfaces-and-host-strategy.md), spec
 [0003](0003-compact-calendar-ui.md) (optional CmdPal surface; the host constraints and the
@@ -43,6 +44,14 @@ The design study in [itsycal-visual-reference.md](../reference/itsycal-visual-re
 input, not an acceptance source: where its estimates differ from this spec (for example a
 240–270 DIP month block or an ≈560 DIP client height), the numbers here are normative.
 
+**Measured height amendment (2026-11-08, after design-review v3).** The v3 flyout evidence,
+measured on the installed build with the five-row ordinary fixture, gives a collapsed client
+height of **547 DIP** (no scroll), a **220-DIP** month block inside the 224-DIP cap (49.1% of
+448, 40.2% of 547, 36.7% of 600) and a **600-DIP** expanded height at the cap. Revision 3's
+480 ±16 DIP collapsed target was an estimate that cannot fit readable two-line rows; AC-1b is
+amended to **544 ±16 DIP (528–560)**, superseding that estimate. The 448-DIP floor and the
+600-DIP ceiling are unchanged, and the ≤50% month rule still holds at every allowed height.
+
 ## Acceptance criteria
 
 - [ ] **AC-1 — window geometry and composition:** the flyout is 340–380 DIP wide (~360 target).
@@ -51,25 +60,34 @@ input, not an acceptance source: where its estimates differ from this spec (for 
       that range when the agenda or details change.
   - [ ] **AC-1a — month budget:** the month block (month header/navigation row + weekday header
         + six week rows) occupies **at most 224 DIP**, measured from the top of the month header
-        to the bottom of the last week row. With the 448-DIP minimum client height this is
-        exactly 50%; at the 480-DIP collapsed target it is 46.7%, and at the 600-DIP maximum
-        37.3%. The 448-DIP floor is twice the month budget, so the ≤50% rule holds at every
-        allowed client height. The PR records the measured month DIP and the client height in
-        DIP at both captured sizes.
-  - [ ] **AC-1b — collapsed height and no scrolling:** with the ordinary fixture (five collapsed
-        rows: one multi-day all-day row, one single all-day row and three timed rows) and no
-        expansion, the measured client height is **480 ±16 DIP** and the last row is visible
-        without scrolling. Detect by capturing the initial view and a scroll-to-end view: pass
-        only if the content does not move and the last row is visible in the initial capture; do
-        not infer scrolling from a scrollbar. Record the client height (`GetClientRect` or
-        `AppWindow` size, physical pixels divided by the window DPI scale) and both screenshots.
+        to the bottom of the last week row. The measured block is **220 DIP** with 27-DIP day
+        cells — the density needed to hold six week rows inside the cap — so 220 DIP is 49.1%
+        of the 448-DIP floor, 40.2% of the measured 547-DIP collapsed height and 36.7% of the
+        600-DIP maximum. The 448-DIP floor is twice the month budget, so the ≤50% rule holds at
+        every allowed client height. The PR records the measured month DIP and the client height
+        in DIP at the captured sizes.
+  - [ ] **AC-1b — collapsed height and no scrolling:** with the five-row ordinary fixture (one
+        multi-day all-day row, one single all-day row and three timed rows) and no expansion,
+        the measured client height is **544 ±16 DIP (528–560)** and the last row plus the bottom
+        edge are visible without scrolling. The measured height is **547 DIP**: 302 DIP of fixed
+        chrome (month block, window header and gaps) + five ~47-DIP two-line rows (≈235 DIP) +
+        ~10 DIP row spacing. The earlier 480-DIP estimate cannot meet this contract — 480 − 302
+        leaves 178 DIP for five rows, 35.6 DIP each, below the ~47 DIP a readable two-line row
+        needs. Detect by capturing the initial view and a scroll-to-end view: pass only if the
+        content does not move and the last row plus bottom edge are visible in the initial
+        capture; do not infer scrolling from a scrollbar. Record the client height
+        (`GetClientRect` or `AppWindow` size, physical pixels divided by the window DPI scale)
+        and both screenshots.
   - [ ] **AC-1c — expanded details grow, then scroll:** expanding one ordinary event grows the
-        flyout, up to the **600-DIP maximum**, so that the details and the complete action row
-        (`Join meeting`, `Copy link`, `Close details` as applicable) remain visible without
-        scrolling. If the content would still exceed 600 DIP, the window stays at 600 and the
-        agenda pane scrolls one page; one scroll-to-end position must show the complete action
-        row, fully visible and activatable. The long fixture follows the same grow-then-scroll
-        rule. Each state records its client height and a screenshot.
+        flyout, up to the **600-DIP maximum** (measured at 600), so that the details and the
+        complete action row (`Join meeting`, `Copy link`, `Close details` as applicable) remain
+        visible without scrolling. If the content would still exceed 600 DIP, the window stays
+        at 600 and the agenda pane scrolls one page; one scroll-to-end position must show the
+        complete action row, fully visible and activatable. Measured at the cap with a 297-DIP
+        agenda viewport: the meeting-details panel is 374 DIP (77 DIP of scroll) and the long
+        panel 306 DIP (9 DIP of scroll); the action row is fully visible at the initial offset
+        and at the scroll-to-end offset. The long fixture follows the same grow-then-scroll
+        rule. Each state records its client height, scroll offset and a screenshot.
 - [ ] **AC-2 — native material, positioning, DPI and dismissal** (separate evidence per part):
   - [ ] **AC-2a — material and theme:** the acrylic backdrop is visible in dark and light themes;
         in high contrast (all four contrast themes) acrylic is replaced by a **solid,
@@ -158,9 +176,9 @@ input, not an acceptance source: where its estimates differ from this spec (for 
 
 | AC | Test | Kind |
 |---|---|---|
-| AC-1a | Installed MSIX, ordinary fixture; screenshot at ~360 DIP; measure the month block and the client height with `GetClientRect`/`AppWindow`; pass only if month ≤224 DIP and ≤50% at 448/480/600; record both DIP values | manual + screenshot |
-| AC-1b | Ordinary fixture, no expansion; initial and scroll-to-end screenshots; client height 480 ±16 DIP; last row visible, content does not move | manual + screenshot |
-| AC-1c | Ordinary fixture, one event expanded; long fixture expanded; client height ≤600 DIP; details/action row visible without scrolling, or one scroll-to-end shows the complete action row; record heights | manual + screenshot |
+| AC-1a | Installed MSIX, ordinary fixture; screenshots at ~360 DIP, the 448-DIP floor and the 600-DIP ceiling; measure the month block and the client height with `GetClientRect`/`AppWindow`; pass only if month ≤224 DIP and ≤50% at 448/547/600 (measured 220 DIP = 49.1%/40.2%/36.7%); record the DIP values | manual + screenshot |
+| AC-1b | Ordinary fixture, no expansion; initial and scroll-to-end screenshots; client height 544 ±16 DIP (528–560; measured 547); last row and bottom edge visible, content does not move | manual + screenshot |
+| AC-1c | Ordinary fixture, one event expanded; long fixture expanded; client height ≤600 DIP (measured 600, 297-DIP agenda viewport, 77/9-DIP scroll); details/action row visible without scrolling, or one scroll-to-end shows the complete action row; record heights and offsets | manual + screenshot |
 | AC-2a | Screenshots in dark/light and all four high-contrast themes; solid fallback with no acrylic in HC; transparency-off/Battery Saver fallback | manual + screenshot |
 | AC-2b | Tray-monitor and cursor-monitor cases; work-area clamp; reposition on every show; record monitor device name, work area and DPI | manual + screenshot |
 | AC-2c | 100/125/150/200% DPI screenshots; width 340–380 DIP; no clipping; mixed-DPI move | manual + screenshot |
@@ -191,19 +209,27 @@ during screenshots. Screenshots are read back; a JSON assertion is not visual ev
 ## Review
 
 Review record: **round 3 independent spec review (2026-11-08): request changes**; revision 3
-submitted 2026-11-08 for re-review — **verdict pending**. Production implementation starts only
-after an `approve` or `approve with notes` verdict is recorded; the existing feasibility spike is
-not implementation of this spec and cannot substitute for the verdict.
+submitted 2026-11-08 for re-review — **verdict pending**, and no approval is claimed. A measured
+amendment (2026-11-08) changes the collapsed target to 544 ±16 DIP based on the 547-DIP five-row
+measurement; the independent re-review of the amended spec is still pending. Production
+implementation starts only after an `approve` or `approve with notes` verdict is recorded; the
+existing feasibility spike is not implementation of this spec and cannot substitute for the
+verdict.
 
 - Round 3 (2026-11-08, independent of the author): request changes — AC-1 had no client-height
   contract; AC-2/AC-4/AC-6 bundled unrelated claims; the AC-6 update premise was false (the
   current `UpdateService` is CmdPal-specific: it hardcodes `Microsoft.CommandPalette` and
   restarts the palette); AC-5 claimed update/settings were already in the core; there was no
   empty/loading/error AC. Revision 3 resolves them: a 448–600 DIP content-hugging height with a
-  480 ±16 DIP collapsed target and a 600-DIP grow-then-scroll policy; AC-2/AC-4/AC-6 split into
+  480 ±16 DIP collapsed target (superseded by the measured amendment below) and a 600-DIP
+  grow-then-scroll policy; AC-2/AC-4/AC-6 split into
   measurable parts; the flyout-specific apply/restart path separated from the CmdPal updater;
   AC-5 names the merged core and the remaining ARCH-802 work; AC-7 adds the three states.
-- Spec reviewer: round 3 verdict above; re-review pending (independent of the author).
+- Spec amendment (2026-11-08): collapsed target **544 ±16 DIP (528–560)**, measured **547 DIP**
+  on the five-row ordinary fixture (220-DIP month block inside the 224-DIP cap, 600-DIP expanded
+  cap); supersedes the 480 ±16 estimate; independent re-review pending.
+- Spec reviewer: round 3 verdict above; re-review of the amended spec pending (independent of
+  the author).
 - Design reviewer: required for the implementation (installed-build screenshots, dark/light,
   ~360 DIP, expanded details); not applicable to the spike.
 - Code review: after the implementation; ADR 0003 accepted by the PO.

@@ -38,6 +38,9 @@ the release workflow reads it to build the GitHub release notes.
   flyout update path from the CmdPal updater, records the merged shared core and the remaining
   ARCH-802 work, adds empty/loading/error states, and marks the feasibility spike as
   non-acceptance evidence.
+- Amended spec 0004's collapsed-height target from 480 ±16 to **544 ±16 DIP** after the v3
+  five-row ordinary-fixture measurement (measured 547 DIP, 220-DIP month block within the
+  224-DIP cap, 600-DIP expanded cap); the 448-DIP floor and 600-DIP ceiling are unchanged.
 - Backlog: UI-105 added for optional CmdPal surface polish; ARCH-802 and the UI-101/102 status
   reflect the merged `ItsycalForWindows.Core` (models + providers) and spec 0004 revision 3.
 
