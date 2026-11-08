@@ -1,9 +1,12 @@
 # 0008 - Google Calendar OAuth 2.0 provider (read-only, PKCE loopback)
 
-Status: proposed - revision 1 (2026-11-08). Offline implementation/tests are complete on
-`feat/google-oauth`; an independent spec review has **not** run and no approval is claimed.
-Live end-to-end verification with a real Google account and a PO-owned Google Cloud desktop
-client id/redirect is **not** part of this change.
+Status: proposed - revision 2 (2026-11-08). Offline implementation/tests are complete on
+`feat/google-oauth`; independent **spec review: approve with notes** and
+**code review: approve with notes** are recorded in the PR (comments 6725911278/6725911584).
+CI run 42512729287 at head `4eb0c9a` is green: 501/501 tests, line coverage 58.6% (floor
+30%), ARM64 build. Live end-to-end verification with a real Google account and a PO-owned
+Google Cloud desktop client id/redirect is **not** part of this change; the accepted merge
+deferrals are listed below.
 Backlog: [PRV-301](../BACKLOG.md) (Google Calendar API v3 + OAuth), with PRV-306 (account/
 calendar-selection UX), PRV-307 (token storage), PRV-309 (fixture harness), PRV-311 (security
 review). Related: [ADR 0005](../adr/0005-external-calendar-providers-and-store-gate.md)
@@ -134,7 +137,7 @@ provider, DNS or browser.
 
 ## Privacy and security
 - **At rest:** tokens only in the existing DPAPI per-account record; account JSON carries no token; no event content is written to disk here.
-- **In transit:** HTTPS-only validated endpoints; no client secret; redirects rejected; size/time caps; Bearer header never logged.
+- **In transit:** HTTPS-only validated endpoints; no client secret; size/time caps; Bearer header never logged. The reusable token client currently rejects a redirect post-hoc; a redirect-disabled handler + 307/auto-follow test is a required fix before UI/sign-in wiring (PRV-301/311).
 - **Loopback:** bind before launch, one callback, state+PKCE, path/Host check, 5-minute budget, cancellation closes it. A local process racing the port cannot redeem the code without the verifier; same-user DoS/malware remains a documented residual risk.
 - **Redaction:** `OAuthToken`, `OAuthTokenResult`, `OAuthFlowResult`, `OAuthPkce`, `ProviderSecret` and `ProviderEvent.RemoteLink` expose no credential/content; Google status messages contain no calendar id, URL or event text.
 - **Remaining hardening:** independent security review (PRV-311) before live shipping; Credential Locker storage (ADR 0005 4.2/PRV-307) is not implemented - DPAPI is the current framework layout and PRV-307 owns the migration.
@@ -153,8 +156,30 @@ End-to-end sign-in requires a **PO-owned Google Cloud project** with an OAuth co
 | Graph/Yandex/CalDAV transports; encrypted cache; security review | PRV-302/303/304, PRV-308, PRV-311 |
 | Write/RSVP/event editing | separate ADR |
 
+## Contract changes (accepted for this slice)
+
+- `ProviderSecret.Scope` (OAuth scope storage; not secret) and `ProviderEvent.RemoteLink`
+  (Google `htmlLink`; http(s) only) are additive optional members on framework contracts.
+- `ProviderCatalog` gains optional Google options/token-store parameters; the Google skeleton
+  is replaced by `GoogleCalendarProvider`; the skeleton test cases for Google are removed.
+- Source-compatible for existing call sites; binary compatibility is not claimed. Spec 0006
+  AC-6/test plan must note that Google is no longer a skeleton (follow-up docs touch).
+- `GoogleCalendarProvider` currently has a token-store fallback; the PR #52 secret-delivery
+  contract must be restored (or the exception documented) before UI wiring.
+
 ## Review
-- Spec reviewer: **pending** (must be independent of the author).
-- Verdict: **not requested yet** - implementation is not treated as accepted.
-- Blocking findings resolved: none recorded. Reviewers should also check the additive existing-contract changes (`ProviderSecret.Scope`, `ProviderEvent.RemoteLink`), the replaced Google skeleton and the `ProviderCatalog` options/token-store parameters, since the task file scope was new `OAuth/`/`Google/` files plus tests and this spec.
+
+- **Spec review: approve with notes** (2026-11-08, independent; PR comment 6725911278).
+  Notes: ADR/BACKLOG reconciliation for access-token persistence/Credential-Locker deviation;
+  enforce exactly `calendar.readonly`; redirect-disabled token handler; explicit contract
+  changes/spec 0006 annotation; test/evidence gaps.
+- **Code review: approve with notes** (2026-11-08, independent; PR comment 6725911584).
+  Majors: token-store read-modify-write race; post-hoc redirect detection; missing
+  `client_secret`/`code_verifier` reservations; provider reads the token store directly.
+- **Verdict: approved with notes for merge** of the unwired library; do **not** wire UI/sign-in
+  until the major security/contract items and the `calendar.readonly` invariant are fixed.
+- **Accepted merge deferrals:** scope invariant + redirect handler + token-store atomicity +
+  secret-delivery restoration + `client_secret` reservations (PRV-301/307/311); syncToken/410
+  (PRV-301); UI/calendar selection (PRV-306); Credential Locker/layout (PRV-307); encrypted
+  cache (PRV-308); Graph/Yandex/CalDAV (PRV-302/303/304); live end-to-end (PRV-301/309).
 
