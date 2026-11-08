@@ -37,6 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -54,10 +55,26 @@ jobs:
       - name: Stamp a unique development package version
         shell: pwsh
         run: |
-          # Every development build gets a higher revision than the previous one, so
-          # Add-AppxPackage upgrades in place instead of failing with 0x80073CFB.
+          # Development builds must be newer than the latest published release, otherwise
+          # Add-AppxPackage rejects the dev MSIX as a downgrade. Derive the base from the
+          # newest release tag and bump only the revision.
+          $tags = @(git tag --list 'v*' --sort=-version:refname)
+          if ($tags.Count -eq 0) {
+            throw 'No v* release tag was found; refusing to build a dev package below the released version.'
+          }
+          $latest = $tags[0]
+          if ($latest -notmatch '^v(?<version>\d+\.\d+\.\d+)$') {
+            throw "Latest release tag '$latest' is not vX.Y.Z; cannot derive the development base."
+          }
+          $baseVersion = $Matches['version']
           $revision = ([int]$env:GITHUB_RUN_NUMBER % 65534) + 1
-          ./windows/scripts/Set-PackageVersion.ps1 -Revision $revision
+          $parts = $baseVersion.Split('.')
+          $devVersion = '{0}.{1}.{2}.{3}' -f $parts[0], $parts[1], $parts[2], $revision
+          if ([version]$devVersion -le [version]('{0}.0' -f $baseVersion)) {
+            throw "Computed development version $devVersion is not newer than the release base $baseVersion.0."
+          }
+          Write-Host "Development package version: $devVersion (base $baseVersion from the latest release tag)."
+          ./windows/scripts/Set-PackageVersion.ps1 -Version $devVersion
 
       - name: Build and package MSIX (Debug, x64)
         run: >

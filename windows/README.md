@@ -73,7 +73,7 @@ The identity version is derived, never hand-maintained:
   the release workflow stamps the manifest, the project metadata and the WinGet manifests
   before packaging.
 - **Development build**: `.github/workflows/windows-build.yml` stamps the revision from the
-  GitHub run number (`1.0.0.<run>`), so every artifact is newer than the previous one and
+  GitHub run number (`<newest release X.Y.Z>.<run+1>`), so every artifact is newer than the previous one and
   `Add-AppxPackage` upgrades in place instead of failing with `0x80073CFB`.
 - **Local**: `.\windows\scripts\Set-PackageVersion.ps1 -Version 1.2.3.0` (or
   `-Revision 42` to keep the current base) before building.

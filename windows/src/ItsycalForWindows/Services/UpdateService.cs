@@ -542,9 +542,11 @@ internal sealed class UpdateService
                 return Task.FromResult(UpdateApplyResult.Failed("The update package is not an MSIX file."));
             }
 
-            var scriptPath = Path.Combine(Path.GetDirectoryName(fullMsixPath)!, UpdaterScriptName);
-            var script = BuildUpdaterScript(fullMsixPath, LogFilePath);
-            File.WriteAllText(scriptPath, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            var stagingFailure = TryStageUpdaterScript(fullMsixPath, LogFilePath, out var scriptPath);
+            if (stagingFailure is not null)
+            {
+                return Task.FromResult(stagingFailure);
+            }
 
             var startInfo = new ProcessStartInfo
             {
@@ -864,10 +866,78 @@ internal sealed class UpdateService
     }
 
     /// <summary>
+    /// Verifies the package against its adjacent checksum and writes the BOM-marked updater
+    /// script. This is the seam used by <see cref="ApplyAsync"/> so the fail-closed and BOM
+    /// behaviour is covered without starting a process.
+    /// </summary>
+    /// <param name="fullMsixPath">Absolute path of the verified package.</param>
+    /// <param name="logPath">Update log the generated script appends to.</param>
+    /// <param name="scriptPath">Path of the generated script when staging succeeds.</param>
+    /// <returns>A failure result, or null on success.</returns>
+    internal static UpdateApplyResult? TryStageUpdaterScript(string fullMsixPath, string logPath, out string scriptPath)
+    {
+        scriptPath = Path.Combine(Path.GetDirectoryName(fullMsixPath)!, UpdaterScriptName);
+        var checksumError = VerifyPackageChecksumForApply(fullMsixPath, out var verifiedSha256);
+        if (checksumError is not null)
+        {
+            return UpdateApplyResult.Failed(checksumError);
+        }
+
+        File.WriteAllBytes(scriptPath, BuildUpdaterScriptBytes(fullMsixPath, logPath, verifiedSha256));
+        return null;
+    }
+    /// <summary>
+    /// Re-verifies the package against the <c>SHA256SUMS.txt</c> stored next to it immediately
+    /// before staging the updater. Fails closed when the checksum file or entry is missing or
+    /// the package bytes no longer match (for example after a tamper).
+    /// </summary>
+    /// <param name="msixPath">Absolute path of the verified package.</param>
+    /// <param name="verifiedSha256">Lower-case hex SHA256 that matched, when verification succeeds.</param>
+    /// <returns>An error message, or null when the package is intact.</returns>
+    internal static string? VerifyPackageChecksumForApply(string msixPath, out string verifiedSha256)
+    {
+        verifiedSha256 = string.Empty;
+        var folder = Path.GetDirectoryName(msixPath);
+        var sumsPath = string.IsNullOrEmpty(folder) ? null : Path.Combine(folder, ChecksumFileName);
+        if (sumsPath is null || !File.Exists(sumsPath))
+        {
+            return $"{ChecksumFileName} is missing next to the update package; refusing to install without a checksum.";
+        }
+
+        if (!TryGetExpectedSha256(File.ReadAllText(sumsPath), Path.GetFileName(msixPath), out var expected))
+        {
+            return $"{ChecksumFileName} has no valid SHA256 entry for {Path.GetFileName(msixPath)}; refusing to install.";
+        }
+
+        using var stream = new FileStream(msixPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 64 * 1024);
+        var actual = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+        {
+            return "SHA256 verification failed immediately before apply; the download was discarded.";
+        }
+
+        verifiedSha256 = actual;
+        return null;
+    }
+
+    /// <summary>
+    /// Returns the updater script bytes encoded as UTF-8 with a BOM. Windows PowerShell 5.1
+    /// reads BOM-less scripts as ANSI, which corrupts non-ASCII profile paths.
+    /// </summary>
+    internal static byte[] BuildUpdaterScriptBytes(string msixPath, string logPath, string? verifiedSha256 = null)
+    {
+        var body = Encoding.UTF8.GetBytes(BuildUpdaterScript(msixPath, logPath, verifiedSha256));
+        var preamble = Encoding.UTF8.GetPreamble();
+        var bytes = new byte[preamble.Length + body.Length];
+        preamble.CopyTo(bytes, 0);
+        body.CopyTo(bytes, preamble.Length);
+        return bytes;
+    }
+    /// <summary>
     /// Builds the detached updater script. The MSIX must be signed by a certificate the machine
     /// trusts; the script closes Command Palette and the extension before installing.
     /// </summary>
-    internal static string BuildUpdaterScript(string msixPath, string logPath)
+    internal static string BuildUpdaterScript(string msixPath, string logPath, string? verifiedSha256 = null)
     {
         var script = new StringBuilder();
         script.AppendLine("# Itsycal for Windows updater. Generated by UpdateService; safe to delete after it runs.");
@@ -894,9 +964,15 @@ internal sealed class UpdateService
         script.AppendLine("    }");
         script.AppendLine("}");
         script.AppendLine();
+        if (!string.IsNullOrWhiteSpace(verifiedSha256))
+        {
+            script.Append("Write-UpdateLog 'verified sha256: ").Append(EscapePowerShellLiteral(verifiedSha256)).AppendLine("'");
+        }
+
         script.AppendLine("Write-UpdateLog \"starting update: $msix\"");
         script.AppendLine("Start-Sleep -Seconds 2");
         script.AppendLine();
+        script.AppendLine("$failed = $false");
         script.AppendLine("try {");
         script.AppendLine("    foreach ($name in $processNames) {");
         script.AppendLine("        Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue");
@@ -906,21 +982,22 @@ internal sealed class UpdateService
         script.AppendLine("    Write-UpdateLog \"installed: $msix\"");
         script.AppendLine("} catch {");
         script.AppendLine("    Write-UpdateLog (\"install failed: \" + $_.Exception.Message)");
-        script.AppendLine("    exit 1");
-        script.AppendLine("}");
-        script.AppendLine();
-        script.AppendLine("try {");
-        script.AppendLine("    $hostPackage = Get-AppxPackage -Name $hostPackageName -ErrorAction SilentlyContinue");
-        script.AppendLine("    if ($hostPackage) {");
-        script.AppendLine("        $applicationId = (Get-AppxPackageManifest -Package $hostPackage.PackageFullName).Package.Applications.Application.Id");
-        script.AppendLine("        Start-Process -FilePath ('shell:AppsFolder\\{0}!{1}' -f $hostPackage.PackageFamilyName, $applicationId)");
-        script.AppendLine("        Write-UpdateLog 'restarted Command Palette'");
-        script.AppendLine("    } else {");
-        script.AppendLine("        Write-UpdateLog \"package $hostPackageName not found; restart Command Palette manually\"");
+        script.AppendLine("    $failed = $true");
+        script.AppendLine("} finally {");
+        script.AppendLine("    try {");
+        script.AppendLine("        $hostPackage = Get-AppxPackage -Name $hostPackageName -ErrorAction SilentlyContinue");
+        script.AppendLine("        if ($hostPackage) {");
+        script.AppendLine("            $applicationId = (Get-AppxPackageManifest -Package $hostPackage.PackageFullName).Package.Applications.Application.Id");
+        script.AppendLine("            Start-Process -FilePath ('shell:AppsFolder\\{0}!{1}' -f $hostPackage.PackageFamilyName, $applicationId)");
+        script.AppendLine("            Write-UpdateLog 'restarted Command Palette'");
+        script.AppendLine("        } else {");
+        script.AppendLine("            Write-UpdateLog \"package $hostPackageName not found; restart Command Palette manually\"");
+        script.AppendLine("        }");
+        script.AppendLine("    } catch {");
+        script.AppendLine("        Write-UpdateLog (\"restart failed: \" + $_.Exception.Message)");
         script.AppendLine("    }");
-        script.AppendLine("} catch {");
-        script.AppendLine("    Write-UpdateLog (\"restart failed: \" + $_.Exception.Message)");
         script.AppendLine("}");
+        script.AppendLine("if ($failed) { exit 1 }");
         return script.ToString();
     }
 
