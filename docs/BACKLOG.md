@@ -8,7 +8,7 @@ change scope or priority are recorded here as PO decisions. Specs live in `docs/
 The user (PO) directed that the interface must become **beautiful, modern, laconic and
 intuitive**, modelled on the original ItsyCal: a small popover where the month calendar is
 only for quick date navigation (it must not take half the screen), and below it the day's
-meetings are visible with times, details and a one-click **Join** icon for the selected
+meetings are visible with times, details and a **Join** action for the selected
 event. This epic takes priority over the provider platform: a compact, finished UI is the
 product's core value; OAuth providers add surface without it.
 
@@ -19,7 +19,7 @@ mode; keyboard navigation) and its
 month grid on top, compact toolbar, agenda groups with colour dots, time ranges and a video
 icon on meeting rows.
 
-**Decision:** UI compaction is the next product epic after v1.2.2 reliability. Changelog
+**Decision:** UI compaction is the next product epic after v1.2.2 reliability; the PO chose the hybrid surface strategy on 2026-11-08 (ADR 0003): a standalone WinUI 3 tray flyout becomes the primary compact UI, the CmdPal extension remains optional, and a custom bottom dock is rejected. Changelog
 discipline is introduced at the same time (`CHANGELOG.md`, Keep a Changelog).
 
 ## Now / next / later
@@ -28,7 +28,7 @@ discipline is introduced at the same time (`CHANGELOG.md`, Keep a Changelog).
 |---|---|---|---|---|
 | ARCH-801 | P0 | Hybrid surfaces: standalone WinUI 3 tray flyout + optional CmdPal extension | ADR 0003 accepted: standalone WinUI 3 tray app is the primary compact surface (acrylic, ~360 DIP, hotkey); CmdPal extension stays optional; shared `ItsycalForWindows.Core`; no taskbar/bottom-dock injection. Spike first, then implementation. | Decided, spec 0004 draft |
 | ARCH-802 | P0 | Extract `ItsycalForWindows.Core` | Calendar model, appointment/ICS providers, update and settings move behind a shared library with tests; both surfaces consume it; no duplicated provider/update logic. | Planned |
-| UI-101 | P0 | Compact calendar flyout | At the host-controlled 800×480 DIP window (min 640), the composition stays compact: month grid is quick-navigation only (≤55% of card height, single-line title, no oversized headers); selected-day agenda with inline details below. The extension cannot change the host width. Spec: [0003](specs/0003-compact-calendar-ui.md). | Spec written, review pending |
+| UI-101 | P0 | Compact calendar flyout (standalone primary) | Primary surface is the standalone WinUI 3 flyout (~360 DIP, acrylic, hotkey; ADR 0003): month grid is quick-navigation only, selected-day agenda with inline details below, no half-screen calendar. The optional CmdPal surface keeps host constraints (spec 0003). Spec: [0004](specs/0004-standalone-compact-flyout.md). | Spec 0004 draft, spike next |
 | UI-102 | P0 | Inline details + Join icon in agenda | Selecting an event expands its details under the row: full when-line, location, notes, `Join` (only for meeting links), `Copy link`; no separate details block after the whole agenda, no full-screen scroll for a typical 3-event day. | In UI-101 spec |
 | UI-103 | P1 | Visual system: light/dark, typography, spacing, accessibility | Host acrylic translucency visible through the card (no opaque panel fill, no fake alpha); adaptive dark/light; readable contrast over the material; no clipped labels at 800×480 and the 640-DIP minimum; renderer-supported keyboard (Today/prev/next, Enter on actions). Arrow-key day focus and per-element UIA names are host-feature-dependent and deferred. | Planned |
 | ONB-101 | P1 | Calendars onboarding | `Itsycal: open calendar folder` command, import `.ics…` file picker, source status (name, last read, parse errors), empty-state CTA. | Planned |

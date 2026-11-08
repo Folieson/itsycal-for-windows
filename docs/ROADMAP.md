@@ -28,11 +28,12 @@ provider that requires the network).
 
 ### v1.2.3 — "compact, finished UI" (P0, PO decision 2026-11-08)
 
-The interface becomes a compact ItsyCal-like popover: month grid only for quick date
-navigation (never half the screen), agenda below with times, locations and inline details
-for the selected meeting, plus a one-click Join icon. Modern, laconic, intuitive; dark/light
-and keyboard/accessibility included. This milestone precedes the provider platform.
-Plan: [BACKLOG.md](BACKLOG.md). Spec: [0003-compact-calendar-ui.md](specs/0003-compact-calendar-ui.md).
+Per ADR 0003 the primary compact UI moves to a standalone WinUI 3 tray flyout (~360 DIP,
+acrylic, hotkey): the month is only for quick date navigation, the agenda below shows
+times/locations/inline details and a Join action for the selected meeting. The PowerToys
+Command Palette extension remains an optional secondary surface with its host constraints.
+Plan: [BACKLOG.md](BACKLOG.md). ADR: [0003](adr/0003-surfaces-and-host-strategy.md).
+Spec: [0004-standalone-compact-flyout.md](specs/0004-standalone-compact-flyout.md).
 
 ### v1.3 — "provider platform"
 
