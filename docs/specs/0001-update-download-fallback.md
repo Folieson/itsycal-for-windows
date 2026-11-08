@@ -25,9 +25,10 @@ fallback is a single attempt per asset and a rate-limit response becomes a norma
 
 - [x] **AC-1**: `BuildApiAssetUri(assetId)` returns
       `https://api.github.com/repos/Folieson/itsycal-for-windows/releases/assets/{assetId}`.
-- [x] **AC-2**: `ShouldRetryViaApi` returns true for transport failures (no status),
-      request timeouts surfaced while the caller token is live, 5xx, 429 and 403; false for
-      2xx, 400/401/404 and 408 (408 is treated as a client error, not retried).
+- [x] **AC-2**: `ShouldRetryViaApi` classifies HTTP statuses: true for 5xx, 429 and 403;
+      false for 2xx, 400/401/404 and 408 (408 is a client error, not retried). The timeout
+      case (live caller token) is classified by `ShouldFallbackToApi`, which also accepts a
+      transport exception with no status.
 - [x] **AC-3**: `ParseReleases` reads the numeric `id` of each asset into
       `ReleaseAsset.AssetId`; an asset without an id keeps `AssetId == 0`.
 - [x] **AC-4**: `DownloadAsync` downloads **both** `SHA256SUMS.txt` and the MSIX browser

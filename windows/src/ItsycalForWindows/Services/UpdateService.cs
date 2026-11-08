@@ -244,6 +244,8 @@ internal sealed class UpdateService
     private const string ExtensionProcessName = "ItsycalForWindows";
     private const int MaxErrorMessageLength = 200;
 
+    private static readonly Lazy<HttpClient> DefaultHttpClient = new(CreateHttpClient);
+
     private readonly UpdateSettings _settings;
     private readonly HttpClient _httpClient;
     private readonly string _dataFolder;
@@ -266,7 +268,7 @@ internal sealed class UpdateService
     internal UpdateService(UpdateSettings settings, HttpMessageHandler? handler, string? dataFolder = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _httpClient = handler is null ? CreateHttpClient() : new HttpClient(handler, disposeHandler: false);
+        _httpClient = handler is null ? DefaultHttpClient.Value : new HttpClient(handler, disposeHandler: false);
         _dataFolder = string.IsNullOrWhiteSpace(dataFolder) ? DataFolder : dataFolder;
     }
 
@@ -437,7 +439,17 @@ internal sealed class UpdateService
             var msixPath = Path.Combine(folder, msixFileName);
             var sumsPath = Path.Combine(folder, ChecksumFileName);
 
-            await DownloadFileAsync(sumsAsset.DownloadUri, sumsAsset.AssetId, sumsPath, cancellationToken).ConfigureAwait(false);
+            var sumsDownloadPath = sumsPath + ".download";
+            try
+            {
+                await DownloadFileAsync(sumsAsset.DownloadUri, sumsAsset.AssetId, sumsDownloadPath, cancellationToken).ConfigureAwait(false);
+                File.Move(sumsDownloadPath, sumsPath, overwrite: true);
+            }
+            finally
+            {
+                TryDeleteFile(sumsDownloadPath);
+            }
+
             var checksumText = await File.ReadAllTextAsync(sumsPath, cancellationToken).ConfigureAwait(false);
             if (!TryGetExpectedSha256(checksumText, msixAsset.Name, out var expectedSha256))
             {
@@ -828,8 +840,6 @@ internal sealed class UpdateService
             : UpdateArchitecture.X64;
 
     /// <summary>Folder that receives the downloads of one release tag.</summary>
-    internal static string UpdateFolderPath(string tag) =>
-        Path.Combine(DataFolder, UpdatesFolderName, ToSafeFolderName(tag));
 
     /// <summary>
     /// Turns a release tag into a folder name that cannot escape the updates folder: only
@@ -952,11 +962,6 @@ internal sealed class UpdateService
         || statusCode == HttpStatusCode.TooManyRequests
         || statusCode == HttpStatusCode.Forbidden;
 
-    /// <summary>True when the API fallback is both allowed and possible for this asset.</summary>
-    /// <param name="assetId">Numeric id from the release JSON; zero means no id is known.</param>
-    /// <param name="statusCode">Status reported by the failed browser download, or null.</param>
-    internal static bool CanRetryViaApi(long assetId, HttpStatusCode? statusCode) =>
-        assetId > 0 && ShouldRetryViaApi(statusCode);
 
     /// <summary>
     /// True when a failed browser download should be retried through the API asset endpoint:
@@ -1029,7 +1034,7 @@ internal sealed class UpdateService
         await CopyResponseToFileAsync(response, path, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task CopyResponseToFileAsync(
+    private static async Task CopyResponseToFileAsync(
         HttpResponseMessage response,
         string path,
         CancellationToken cancellationToken)

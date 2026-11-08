@@ -42,8 +42,9 @@ Behaviour changes start from a spec, not from code:
 1. Write or update `docs/specs/NNNN-<slug>.md` (template: `docs/specs/TEMPLATE.md`): context,
    acceptance criteria, and the test plan that maps every criterion to a test or a documented
    manual check. Cross-cutting decisions still go in `docs/adr/`.
-2. Write the failing tests for the acceptance criteria first (or in the same change and shown
-   red locally/in a draft PR). A change is not ready while a criterion has no test.
+2. Write the failing tests for the acceptance criteria first. When the local toolchain allows,
+   attach the red run; when it does not (offline restore, CI-only environment), CI is the
+   first run and the PR says why. A change is not ready while a criterion has no test.
 3. Keep pure decision logic in testable helpers; network/UI edges get a structural test or a
    manual verification recorded in the PR/checkpoint.
 4. CI is the gate: build, the full test suite with coverage, the coverage floor and MSIX
