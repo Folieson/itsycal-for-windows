@@ -333,6 +333,20 @@ jobs:
               "Full changelog: https://github.com/$repository/commits/$tag"
           )
 
+          $changelogPath = 'CHANGELOG.md'
+          if (-not (Test-Path -LiteralPath $changelogPath)) {
+            throw 'CHANGELOG.md is missing; every release needs a changelog section.'
+          }
+          $changelogText = Get-Content -LiteralPath $changelogPath -Raw
+          $versionPattern = [regex]::Escape($env:VERSION)
+          $changelogMatch = [regex]::Match(
+            $changelogText,
+            "(?ms)^## \[$versionPattern\][^\r\n]*\r?\n(?<body>.*?)(?=^## \[|\z)")
+          if (-not $changelogMatch.Success) {
+            throw "CHANGELOG.md has no section for $env:VERSION; add it before tagging."
+          }
+          $changelogSection = $changelogMatch.Groups['body'].Value.Trim()
+          $lines = @('### What''s changed', '', $changelogSection, '') + $lines
           $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
           Set-Content -LiteralPath $notesPath -Value $lines -Encoding utf8
           "RELEASE_NOTES=$notesPath" >> $env:GITHUB_ENV

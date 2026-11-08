@@ -109,6 +109,10 @@ display language and first-day-of-week setting. The calendar marks days that hav
 a dot; the demo-events commands exist only in DEBUG builds. The dock-band screenshot is still
 pending because PowerToys Dock is not enabled on the verification machine.
 
+## Changelog
+
+Release notes: [CHANGELOG.md](CHANGELOG.md).
+
 ## Build from source
 
 Requires the .NET 10 SDK, the Windows SDK 10.0.26100 and Visual Studio Build Tools for MSIX

@@ -26,7 +26,16 @@ provider that requires the network).
 | ICS provider | `%LOCALAPPDATA%\ItsycalForWindows\calendars\*.ics` files are parsed (RFC 5545 subset, basic recurrence) and merged with the Windows appointment store via a composite source. Any calendar app that can export `.ics` becomes a data source: Google Calendar, Outlook/M365, Exchange, Apple Calendar, CalDAV bridges. |
 | Dock band and settings | Dock subtitle shows the next event today (`13:00 Lunch`) instead of a bare count; update and calendar-source settings are reachable from the palette and documented. |
 
+### v1.2.3 — "compact, finished UI" (P0, PO decision 2026-11-08)
+
+The interface becomes a compact ItsyCal-like popover: month grid only for quick date
+navigation (never half the screen), agenda below with times, locations and inline details
+for the selected meeting, plus a one-click Join icon. Modern, laconic, intuitive; dark/light
+and keyboard/accessibility included. This milestone precedes the provider platform.
+Plan: [BACKLOG.md](BACKLOG.md). Spec: [0003-compact-calendar-ui.md](specs/0003-compact-calendar-ui.md).
+
 ### v1.3 — "provider platform"
+
 
 | Feature | Acceptance |
 |---|---|
