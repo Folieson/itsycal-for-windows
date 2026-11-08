@@ -9,11 +9,14 @@
 - [ ] The new tests cover the acceptance criteria; when the local toolchain allows, a red run is attached, otherwise the PR says why CI-only was used.
 - [ ] CI coverage floor passes and coverage did not decrease in the touched files.
 
-## Independent reviews
+## Roles and independent reviews
 
+- PO / analyst: <!-- who owned scope and authored the spec -->
+- Developer: <!-- implementer -->
+- Tester verification: <!-- role/agent, date, verdict, evidence -->
 - Spec review: <!-- reviewer/agent, date, verdict, link -->
 - Code review: <!-- reviewer/agent, date, verdict, link -->
-- [ ] Neither reviewer was the author; spec and code were reviewed by separate agents.
+- [ ] The tester and both reviewers were different agents from the author and from each other.
 - [ ] Every blocking finding was resolved or explicitly deferred with the user's agreement.
 ## How verified
 
