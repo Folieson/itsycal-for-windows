@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Calendar provider framework (ADR 0002): account storage, provider contracts, the read-only
+    ICS subscription provider and explicit not-implemented skeletons for the OAuth/CalDAV
+    providers. No UI, no packaging and no third-party graph/auth SDKs; the extension and the
+    standalone flyout consume it as a plain library.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <!-- Must match the consuming projects: a different projection package fails with NETSDK1148. -->
+    <WindowsSdkPackageVersion>10.0.26100.68-preview</WindowsSdkPackageVersion>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>ItsycalForWindows.Providers</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>x64;ARM64</Platforms>
+    <WindowsPackageType>None</WindowsPackageType>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ProtectedData (DPAPI) is a BCL extension, not a third-party auth dependency. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ItsycalForWindows.Core\ItsycalForWindows.Core.csproj" />
+  </ItemGroup>
+
+</Project>

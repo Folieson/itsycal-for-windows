@@ -80,9 +80,9 @@ no-event-content-logging promise. Provider logic moves into a new
 | Google Calendar (Gmail/Google Workspace) | OAuth 2.0 authorization code + PKCE on a loopback redirect, `calendar.readonly`, `syncToken` incremental with full resync; installed-build verification with a personal account. |
 | Microsoft Graph (Outlook.com/M365/Exchange Online) | Delegated `Calendars.Read`, `calendarView` + delta; Outlook.com and a Microsoft 365 tenant verified; tenant admin-consent case handled; on-prem Exchange documented out of v1 (EWS follow-up, PO Q1). |
 | Yandex Calendar + generic CalDAV | Yandex preset at `caldav.yandex.ru` with app password and 2FA guidance; CalDAV discovery/time-range query validated on iCloud, Fastmail, Nextcloud and mailbox.org; self-hosted URLs supported with TLS validation. |
-| ICS subscriptions (P1) | HTTP(S) conditional GET (`ETag`/`If-Modified-Since`), refresh interval, no `user:pass@`; existing local `.ics` folder stays as the zero-setup path. |
+| ICS subscriptions (P1) | HTTPS conditional GET (`ETag`/`If-Modified-Since`), refresh interval, no `user:pass@`; existing local `.ics` folder stays as the zero-setup path. |
 | Settings/auth UX | Per-account enable/disable, sign-in/re-authenticate/sign-out/remove, status/last sync/errors; full account window on the primary surface plus a Command Palette status page. |
-| Token storage and sync | Windows Credential Locker/DPAPI per account, lazy refresh, on-demand + in-process background sync, in-memory cache, backoff and offline states. |
+| Token storage and sync | Windows Credential Locker/DPAPI per account, lazy refresh, on-demand + in-process background sync, encrypted on-disk cache (Q7), backoff and offline states. |
 | Verification, privacy, security | Recorded-fixture tests, live-account matrix, privacy policy and Store answers, independent security review; no telemetry. |
 
 **Store gate.** No Microsoft Store submission of a Calwren package before the ADR 0005 §8

@@ -35,5 +35,6 @@
     <ProjectReference Include="..\..\src\ItsycalForWindows\ItsycalForWindows.csproj">
       <SetPlatform>Platform=x64</SetPlatform>
     </ProjectReference>
+    <ProjectReference Include="..\..\src\ItsycalForWindows.Providers\ItsycalForWindows.Providers.csproj" />
   </ItemGroup>
 </Project>

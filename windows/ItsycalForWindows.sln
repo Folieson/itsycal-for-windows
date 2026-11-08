@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItsycalForWindows.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItsycalForWindows.Core", "src\ItsycalForWindows.Core\ItsycalForWindows.Core.csproj", "{AAC4BA65-3791-4100-B2CE-3A82829E9808}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ItsycalForWindows.Providers", "src\ItsycalForWindows.Providers\ItsycalForWindows.Providers.csproj", "{015B5C45-A00D-4097-B89B-AECB2913F936}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -55,6 +57,16 @@ Global
 		{AAC4BA65-3791-4100-B2CE-3A82829E9808}.Release|x64.ActiveCfg = Release|x64
 		{AAC4BA65-3791-4100-B2CE-3A82829E9808}.Release|x64.Build.0 = Release|x64
 		{AAC4BA65-3791-4100-B2CE-3A82829E9808}.Release|x86.ActiveCfg = Release|x64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Debug|ARM64.Build.0 = Debug|ARM64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Debug|x64.ActiveCfg = Debug|x64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Debug|x64.Build.0 = Debug|x64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Debug|x86.ActiveCfg = Debug|x64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Release|ARM64.ActiveCfg = Release|ARM64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Release|ARM64.Build.0 = Release|ARM64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Release|x64.ActiveCfg = Release|x64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Release|x64.Build.0 = Release|x64
+		{015B5C45-A00D-4097-B89B-AECB2913F936}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
