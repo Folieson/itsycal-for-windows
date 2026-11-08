@@ -73,7 +73,6 @@ the release workflow reads it to build the GitHub release notes.
 
 ### Changed
 
-- Hardened the standalone flyout: privacy-safe diagnostic logging (no event content/links; crash log under `%LOCALAPPDATA%\Calwren\logs`), http/https-only meeting links with normalized copy, tray/hotkey recovery, a quit path when the tray is unavailable, deferred light-dismiss toggle, tray/cursor-monitor positioning with DPI re-layout, single-instance activation, hidden taskbar startup and a Windows 10 2004 support floor; CI now verifies the self-contained runtime/PRI alias and smoke-launches the artifact.
 
 - Automatic update checks are now opt-in (off by default), matching the privacy policy.
 - Development builds derive their package version from the newest release tag
@@ -90,7 +89,6 @@ the release workflow reads it to build the GitHub release notes.
   429 and 403; user cancellation never triggers a fallback.
 - Trusted signing: `SIGNING.md` names `TRUSTED_SIGNING_PFX_*`, and the release workflow
   fails instead of silently producing a dev-signed build when trusted mode is requested.
-
 ## [1.2.1] - 2026-11-07
 
 ### Added
