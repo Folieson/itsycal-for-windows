@@ -9,9 +9,9 @@ source status, empty-state call-to-action) is deliberately out of scope and list
 
 Related: [ADR 0002](../adr/0002-calendar-providers-and-network.md) (calendar providers and
 network). The selected-day empty-state contract is owned by the calendar UI specs 0003 (compact
-calendar, Command Palette surface) and 0004 (standalone flyout) on their own, unmerged branch; this
-spec only adds first-run discoverability to the existing Command Palette extension and reuses that
-contract unchanged.
+calendar, Command Palette surface) and 0004 (standalone flyout), both merged into master; those
+specs have their own re-review pending. This spec only adds first-run discoverability to the
+existing Command Palette extension and reuses that contract unchanged.
 
 ## Context
 
@@ -24,11 +24,11 @@ there is the intended workflow.
 
 Current behaviour: the selected-day empty state (`CalendarPage`) renders one combined sentence that
 mixes `No events on this day.` with an `.ics` instruction. UI specs 0003 (AC-5) and 0004 (AC-7)
-already define a different, accepted shape: the exact sentence `No events on this day.` plus a
-separate short calendars-folder pointer, retained until ONB-101 ships the full onboarding. This
-change aligns the extension with that contract instead of keeping a competing sentence; specs
-0003/0004 describe the pointer as one line, and the installed-build check below is what proves the
-rendering rather than a unit test.
+define a different shape: the exact sentence `No events on this day.` plus a separate short
+calendars-folder pointer, retained until ONB-101 ships the full onboarding. This change aligns the
+extension with that contract instead of keeping a competing sentence; specs 0003/0004 describe the
+pointer as one line, and the installed-build check below is what proves the rendering rather than a
+unit test.
 
 Proposal: one palette command, `Itsycal: open calendar folder`, exposed both as a top-level command
 and in the calendar item's context menu. It creates the folder when missing and opens it in File
@@ -90,9 +90,9 @@ Constraints:
 
 Tests in `windows/tests/ItsycalForWindows.Tests/CalendarFolderTests.cs`; they must fail before the
 implementation and pass after it. The revision-2 red probe against the pre-fix implementation failed
-on both new contracts: `GetPath(" ")`/`EnsureCreated(" ")`/`TryOpenInExplorer(" ")` threw
-`ArgumentException`, and `EmptyStateHint` still contained the old `Add an .ics file` sentence.
-After the implementation the full suite passes 255/255.
+on both new contracts: `GetPath(" ")` threw `ArgumentException` (the old `EnsureCreated` and
+`TryOpenInExplorer` had the same guard), and `EmptyStateHint` still contained the old
+`Add an .ics file` sentence. After the implementation the full suite passes 255/255.
 
 | AC | Test (file / name) | Kind |
 |---|---|---|
@@ -150,10 +150,17 @@ changes:
 - localization of the new strings; the extension ships English UI strings only;
 - changing the folder's location, permissions or cleanup policy.
 
-Release notes: this branch intentionally adds no `CHANGELOG.md` entry. The changelog is introduced
-by docs PR #37, which is not merged yet; after #37 merges, rebase this branch and add the
-`[Unreleased]` row in the same change that lands ONB-101a. Until then the branch contains no
-conflicting changelog file.
+Release notes: docs PR #37 has merged, so `CHANGELOG.md` now exists on master and this branch
+includes it via the master merge. This branch does not yet contain the ONB-101a `[Unreleased]`
+entry; one is required before merge under the repository's changelog rule and is left to the lead
+(the implementation scope for this change excluded `CHANGELOG.md`). A suitable entry is:
+
+```markdown
+- ONB-101a: `Itsycal: open calendar folder` creates and opens the local calendars folder from
+  Command Palette; the empty day now shows the folder pointer as a separate line.
+```
+
+No conflicting changelog file was added by this branch.
 
 ## Review
 
@@ -176,8 +183,9 @@ conflicting changelog file.
      failures; invalid input returns `false`/empty (tests added), and the manual plan covers the
      folder-as-file failure and documents why shell failure and missing `%LOCALAPPDATA%` are not
      reproducible on a normal desktop.
-  5. **CHANGELOG:** the spec and PR state that the `[Unreleased]` entry lands after docs PR #37
-     merges; no conflicting changelog file is added and the branch stays ready to rebase.
+  5. **CHANGELOG:** docs PR #37 has merged into master; this branch is rebased onto the new
+     changelog and flags the required ONB-101a `[Unreleased]` entry for the lead's merge commit.
+     No conflicting changelog file was added here.
 - Verdict: **pending re-review** — the round-1 reviewer or a different independent reviewer must
   record `approve` / `approve with notes` before merge. This row is not an author approval.
 - Code review: pending (independent of the author, after the tester).
