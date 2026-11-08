@@ -13,8 +13,9 @@ using ItsycalForWindows.Services;
 namespace ItsycalForWindows;
 
 /// <summary>
-/// Root command provider: a top-level command that opens the calendar, update commands, and
-/// one dock band whose button shows the current date and expands into the calendar flyout.
+/// Root command provider: a top-level command that opens the calendar, the first-run calendar
+/// folder command, update commands, and one dock band whose button shows the current date and
+/// expands into the calendar flyout.
 /// </summary>
 /// <remarks>
 /// The calendar page and the dock item are single cached instances. The host may query
@@ -53,9 +54,22 @@ public partial class ItsycalForWindowsCommandsProvider : CommandProvider
                 Subtitle = "Month calendar and events",
                 MoreCommands =
                 [
+                    // A fresh instance per entry, like the update commands: the top-level command
+                    // and the calendar context menu do not share one command object.
+                    new CommandContextItem(new CalendarFolderCommand())
+                    {
+                        Title = CalendarOnboarding.CommandTitle,
+                        Icon = new IconInfo("\uE8B7"), // Segoe Fluent: Folder
+                    },
                     new CommandContextItem(_settingsManager.Settings.SettingsPage),
                     new CommandContextItem(_updateSettings.SettingsPage),
                 ],
+            },
+            new CommandItem(new CalendarFolderCommand())
+            {
+                Title = CalendarOnboarding.CommandTitle,
+                Subtitle = CalendarOnboarding.CommandSubtitle,
+                Icon = new IconInfo("\uE8B7"), // Segoe Fluent: Folder
             },
             new CommandItem(new UpdateActionCommand("Itsycal: check for updates", _updateService, install: false))
             {

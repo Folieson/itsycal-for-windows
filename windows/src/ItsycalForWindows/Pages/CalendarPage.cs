@@ -66,7 +66,6 @@ internal sealed partial class CalendarPage : ContentPage
     // The extension ships English UI strings only (windows/README.md, Limitations).
     private const string WeekNumberHeader = "Wk";
     private const string EventsHeading = "Events";
-    private const string NoEventsLabel = "No events on this day. Add an exported .ics file to %LOCALAPPDATA%\\ItsycalForWindows\\calendars.";
     private const string LoadingEventsLabel = "Loading events\u2026";
     private const string PreviousMonthLabel = "Previous month";
     private const string TodayLabel = "Today";
@@ -1044,7 +1043,7 @@ internal sealed partial class CalendarPage : ContentPage
 
         if (events.Count == 0)
         {
-            body.Add((JsonNode)TextBlock(NoEventsLabel, size: "small", subtle: true, spacing: RowSpacing, wrap: true));
+            body.Add((JsonNode)TextBlock(CalendarOnboarding.EmptyStateHint, size: "small", subtle: true, spacing: RowSpacing, wrap: true));
             return;
         }
 
