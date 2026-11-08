@@ -4,10 +4,10 @@
     <DataCollectors>
       <DataCollector friendlyName="XPlat code coverage">
         <Configuration>
-          <!-- Only the extension assembly counts; the test assembly would otherwise inflate
-               the number with its own lines. -->
+          <!-- Only the extension and the shared Core assembly count; the test assembly would
+               otherwise inflate the number with its own lines. -->
           <Format>cobertura</Format>
-          <Include>[ItsycalForWindows]*</Include>
+          <Include>[ItsycalForWindows*]*</Include>
           <ExcludeByAttribute>GeneratedCodeAttribute,ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
           <SkipAutoProps>true</SkipAutoProps>
         </Configuration>
