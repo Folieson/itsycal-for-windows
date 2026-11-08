@@ -2,7 +2,17 @@
 
 - Status: accepted (PO decision 2026-11-08) for the gate and the read-only, opt-in
   direction; provider scope and sequencing are proposed here and depend on the answers in
-  [Open questions](#10-open-questions-for-the-po). Implementation has not started.
+  [Open questions](#10-open-questions-for-the-po). **Implementation started:** the first
+  slice is the provider framework + ICS subscriptions (PR #52); see the implementation
+  amendment below.
+- **Implementation amendment (2026-11-08, first slice PR #52):** the framework implements
+  account metadata in `%LOCALAPPDATA%\ItsycalForWindows\accounts\accounts.json` and
+  per-account DPAPI secrets in `secrets.dat` (ProtectedData `CurrentUser`, per-account
+  entropy, quarantine/cross-process lock), not the `settings.json`/`providers\` layout or
+  Credential Locker assumed in §4.6/§5. The deviation is deliberate for the framework
+  slice and is tracked in [PRV-306/PRV-307](../BACKLOG.md); OAuth tokens remain a PRV-307
+  target and no provider UI/surface is wired yet. The encrypted on-disk event cache is a
+  PO decision (below, Q7) and remains the next slice (PRV-308), not part of this framework.
 - Date: 2026-11-08
 - Deciders: product owner
 - Amends: [ADR 0002](0002-calendar-providers-and-network.md) (remote-provider follow-ups),
@@ -539,10 +549,11 @@ recommendation but does not decide them.
    creates no account. Our plan is to state that provider connections and local data can be
    removed at any time and that revoking the provider-side grant happens at the provider;
    is that sufficient?
-7. **Offline cache.** Current promise: no event content at rest. **Recommendation:** keep
-   the in-memory-only cache in v1 (events disappear after restart while offline); an
-   encrypted on-disk cache is a separate privacy decision. Is in-memory-only acceptable,
-   or is offline-across-restart required at launch?
+7. **Offline cache.** **PO decision (2026-11-08): encrypted disk cache is required** — cached
+   events must survive restart, encrypted at rest with a DPAPI-wrapped key + authenticated
+   encryption per account, purged on sign-out/removal, never logged. The framework's
+   in-memory cache is a placeholder only; PRV-308 owns the encrypted cache/TTL/purge work and
+   supersedes the earlier in-memory-only recommendation.
 8. **Account limits.** The Credential Locker documents a 20-credential-per-app limit
    (OAuth accounts), and DPAPI records have no hard cap. **Recommendation:** support up to
    10 OAuth accounts and 10 CalDAV/ICS accounts in v1 with a clear limit message. Is that

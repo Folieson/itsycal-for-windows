@@ -3,8 +3,10 @@
 Status: proposed — revision 2 (2026-11-08). Revision 1 was reviewed independently and
 received "request changes" for the secret-at-rest design, the missing secret-delivery path,
 the transport policy and spec/ADR reconciliation. Revision 2 fixes those blocking findings
-and the majors; the independent spec and code reviews of this revision are still **pending**
-and no approval is claimed.
+and the majors; CI is green (run 42506197925, head `4cd4f18`: 414/414 tests, 52.7% total
+coverage, Providers 87.70%/84.12%, ARM64 step 0/0). A second independent spec review still
+requires the ADR/backlog/evidence reconciliation recorded below; no approval is claimed until
+that re-review completes.
 Backlog: [PRV-300](../BACKLOG.md) (provider epic: registry, shared contracts and
 project skeleton), with slices of PRV-305 (ICS subscriptions), PRV-307 (secret storage) and
 PRV-308 (sync/cache). This is the first slice only; OAuth/Graph/CalDAV transports and the
@@ -197,8 +199,9 @@ dotnet build windows/src/ItsycalForWindows.Providers/ItsycalForWindows.Providers
 # -> 0 errors, 0 warnings; output: bin/ARM64/Debug/net10.0-windows10.0.26100.0/ItsycalForWindows.Providers.dll
 ```
 
-The ARM64 CI step has not been executed in GitHub Actions for this revision (the branch was
-not pushed as part of the fix work), so this spec claims the local build only.
+The ARM64 CI step (restore + build of the Providers project) **executed successfully** in the
+green CI run 42506197925 on head `4cd4f18` (0 warnings/0 errors); the local command above is
+retained for reproducibility. No separate ARM64 test job exists yet.
 
 ## Acceptance criteria
 
@@ -271,8 +274,11 @@ not pushed as part of the fix work), so this spec claims the local build only.
 - [x] **AC-11 — tests, coverage and CI:** the test project references the Providers project
   and all new behavior is covered by offline unit tests; `windows/tests/coverlet.runsettings`
   includes `[ItsycalForWindows.Providers]*`; the coverage floor stays at 30%; the Windows CI
-  job builds the provider library for ARM64. This spec maps each AC to tests and records
-  that independent re-review and CI for revision 2 are pending.
+  job builds the provider library for ARM64. This spec maps each AC to tests and records that
+  revision 2 is **CI-green** (run 42506197925, head `4cd4f18`: 414/414 tests, total line
+  coverage 52.7%, Providers 87.70% line/84.12% branch, ARM64 step 0/0) and that an independent
+  spec re-review is pending (revision 1 was request-changes; the previous blockers are
+  resolved in the code). The earlier local 53.82%/88.08% numbers are superseded by CI.
 
 ## Test plan
 
@@ -364,18 +370,22 @@ request is made by the tests.
 
 | Item | Why deferred | Tracked as |
 |---|---|---|
-| Encrypted on-disk event cache (PO direction) | Needs its own privacy/threat-model update, key management, retention/delete design and ADR 0005 Q7 decision | PRV-308 + ADR/privacy update |
-| UI wiring: `ProviderEventSource` in the flyout/CmdPal composite, add-account/settings surface | No UI in this slice; surfaces do not reference the provider library yet | PRV-306/PRV-308 |
+| Encrypted on-disk event cache (PO decision 2026-11-08) | Needs its own privacy/threat-model update, key management, retention/delete design; ADR 0005 Q7 now records the PO decision | PRV-308 + ADR 0005 Q7 update |
+| UI wiring: `ProviderEventSource` in the flyout/CmdPal composite, add-account/settings surface | No UI in this slice; surfaces do not reference the provider library yet | PRV-306 + PRV-308 |
 | OAuth adapters (Google/Graph), CalDAV/Yandex transports, Credential Locker token storage | Separate transports and review scope | PRV-301/302/303/304/307 |
 | Background scheduling, backoff/jitter, `429 Retry-After` | Not required for the framework slice | PRV-308 |
-| Storage layout `settings.json`/`providers\` per ADR 0005 §4.2 | Kept the existing `accounts\` layout in this slice; explicit deviation documented above | PRV-306/PRV-307 |
+| Storage layout `settings.json`/`providers\` per ADR 0005 §4.2 | Kept the existing `accounts\` layout in this slice; ADR 0005 now records the amendment and PRV-306/PRV-307 own the migration | PRV-306/PRV-307 |
 
 ## Review
 
-- Spec reviewer: **pending** for revision 2 (revision 1 at `187985d` requested changes:
-  B1 tokenized URL at rest, B2 spec/ADR reconciliation, B3 missing secret delivery; majors
-  on transport/cache/store/test gaps).
-- Verdict: **pending** — this revision does not claim approval.
+- Spec review round 1 (`187985d`): request changes — B1 tokenized URL at rest, B2 spec/ADR
+  reconciliation, B3 missing secret delivery; majors on transport/cache/store/tests.
+- Revision 2 fixes B1–B3 and the code majors; CI run 42506197925 is green. Spec review
+  round 2 returned request changes only for the remaining ADR/backlog/evidence
+  reconciliation (ADR 0005 still said implementation not started; deferral pointers).
+  Those documents are now reconciled (ADR 0005 implementation amendment/Q7, BACKLOG
+  PRV-306/307/308, this spec's evidence); a final independent spec re-review is pending.
+- Code review of revision 2 is pending; no approval is claimed by the author.
 - Reviewer must be independent of the author; the same agent must not also perform the code
   review.
 - Code reviewer: **pending** for the revision-2 head; independent of the author and of the
