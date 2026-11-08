@@ -7,10 +7,11 @@ the release workflow reads it to build the GitHub release notes.
 
 ## [Unreleased]
 
-
-- ONB-101a: `Itsycal: open calendar folder` creates and opens the local calendars folder from Command Palette; the empty day shows the folder pointer as a separate line.
 ### Added
 
+- ONB-101a: `Itsycal: open calendar folder` creates and opens the local calendars
+  folder from Command Palette; the empty day shows the folder pointer as a separate
+  `TextBlock`.
 - Backlog and the compact calendar UI specs: spec 0003 for the optional Command Palette
   surface and spec 0004 for the primary standalone flyout (`docs/BACKLOG.md`,
   `docs/specs/`).
