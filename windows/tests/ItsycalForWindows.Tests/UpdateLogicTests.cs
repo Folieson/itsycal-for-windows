@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using ItsycalForWindows.Services;
 using Xunit;
 
@@ -363,6 +364,78 @@ public sealed class UpdateLogicTests
         Assert.Contains("update.log", script);
         Assert.Contains("Start-Sleep -Seconds 2", script);
         Assert.Contains("Get-AppxPackage -Name $hostPackageName", script);
+    }
+
+    [Fact]
+    public void BuildApiAssetUri_UsesRepositoryAndAssetId()
+    {
+        var uri = UpdateService.BuildApiAssetUri(123456789);
+
+        Assert.Equal(
+            "https://api.github.com/repos/Folieson/itsycal-for-windows/releases/assets/123456789",
+            uri.ToString());
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(500, true)]
+    [InlineData(502, true)]
+    [InlineData(503, true)]
+    [InlineData(504, true)]
+    [InlineData(429, true)]
+    [InlineData(403, true)]
+    [InlineData(200, false)]
+    [InlineData(404, false)]
+    public void ShouldRetryViaApi_MatchesRetryableFailures(int? statusCode, bool expected)
+    {
+        var status = statusCode is null ? (HttpStatusCode?)null : (HttpStatusCode)statusCode.Value;
+
+        Assert.Equal(expected, UpdateService.ShouldRetryViaApi(status));
+    }
+
+    [Theory]
+    [InlineData(0, 504, false)]
+    [InlineData(42, 504, true)]
+    [InlineData(42, null, true)]
+    [InlineData(42, 404, false)]
+    public void CanRetryViaApi_RequiresAssetIdAndRetryableStatus(int assetId, int? statusCode, bool expected)
+    {
+        var status = statusCode is null ? (HttpStatusCode?)null : (HttpStatusCode)statusCode.Value;
+
+        Assert.Equal(expected, UpdateService.CanRetryViaApi(assetId, status));
+    }
+
+    [Fact]
+    public void ParseReleases_ReadsAssetIds()
+    {
+        const string json = """
+        [
+          {
+            "tag_name": "v1.2.0",
+            "draft": false,
+            "prerelease": true,
+            "published_at": "2026-11-08T00:00:00Z",
+            "body": "",
+            "html_url": "https://github.com/Folieson/itsycal-for-windows/releases/tag/v1.2.0",
+            "assets": [
+              {
+                "id": 42,
+                "name": "ItsycalForWindows_1.2.0.0_x64.msix",
+                "browser_download_url": "https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.0/ItsycalForWindows_1.2.0.0_x64.msix"
+              },
+              {
+                "name": "SHA256SUMS.txt",
+                "browser_download_url": "https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.0/SHA256SUMS.txt"
+              }
+            ]
+          }
+        ]
+        """;
+
+        var release = Assert.Single(UpdateService.ParseReleases(json));
+
+        Assert.Equal(42, release.Assets[0].AssetId);
+        Assert.Equal(0, release.Assets[1].AssetId);
     }
 
     private static SemanticVersion Version(int major, int minor, int patch) => new(major, minor, patch);

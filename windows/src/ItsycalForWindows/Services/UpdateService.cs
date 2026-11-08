@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
@@ -64,7 +65,11 @@ internal readonly record struct SemanticVersion(int Major, int Minor, int Patch)
 /// <summary>One downloadable file of a GitHub release.</summary>
 /// <param name="Name">Asset file name, for example <c>ItsycalForWindows_1.1.1.0_x64.msix</c>.</param>
 /// <param name="DownloadUri">HTTPS download URL reported by the GitHub API.</param>
-internal sealed record ReleaseAsset(string Name, Uri DownloadUri);
+/// <param name="AssetId">
+/// Numeric GitHub asset id, used for the API asset fallback when the browser download URL is
+/// blocked or failing. Zero when the API response did not carry an id.
+/// </param>
+internal sealed record ReleaseAsset(string Name, Uri DownloadUri, long AssetId = 0);
 
 /// <summary>The parts of a GitHub release that the updater needs.</summary>
 /// <param name="TagName">Release tag, for example <c>v1.1.1</c>.</param>
@@ -207,6 +212,13 @@ internal sealed class UpdateService
 {
     /// <summary>Repository whose GitHub releases are checked.</summary>
     internal const string RepositorySlug = "Folieson/itsycal-for-windows";
+
+    /// <summary>
+    /// Template for the GitHub API asset endpoint. The release JSON carries a numeric asset id,
+    /// and the API serves the same bytes with <c>Accept: application/octet-stream</c>; that
+    /// endpoint survives proxies and rate limits that block the browser download URL.
+    /// </summary>
+    internal const string ApiAssetUrlFormat = "https://api.github.com/repos/{0}/releases/assets/{1}";
 
     /// <summary>GitHub REST endpoint listing the newest releases.</summary>
     internal const string ReleasesUrl = "https://api.github.com/repos/Folieson/itsycal-for-windows/releases?per_page=10";
@@ -405,7 +417,7 @@ internal sealed class UpdateService
             var msixPath = Path.Combine(folder, msixFileName);
             var sumsPath = Path.Combine(folder, ChecksumFileName);
 
-            await DownloadFileAsync(sumsAsset.DownloadUri, sumsPath, cancellationToken).ConfigureAwait(false);
+            await DownloadFileAsync(sumsAsset.DownloadUri, sumsAsset.AssetId, sumsPath, cancellationToken).ConfigureAwait(false);
             var checksumText = await File.ReadAllTextAsync(sumsPath, cancellationToken).ConfigureAwait(false);
             if (!TryGetExpectedSha256(checksumText, msixAsset.Name, out var expectedSha256))
             {
@@ -428,7 +440,7 @@ internal sealed class UpdateService
             var downloadPath = msixPath + ".download";
             try
             {
-                await DownloadFileAsync(msixAsset.DownloadUri, downloadPath, cancellationToken).ConfigureAwait(false);
+                await DownloadFileAsync(msixAsset.DownloadUri, msixAsset.AssetId, downloadPath, cancellationToken).ConfigureAwait(false);
                 if (!await MatchesSha256Async(downloadPath, expectedSha256, cancellationToken).ConfigureAwait(false))
                 {
                     TryDeleteFile(downloadPath);
@@ -614,7 +626,12 @@ internal sealed class UpdateService
                         continue;
                     }
 
-                    assets.Add(new ReleaseAsset(name, downloadUri));
+                    assets.Add(new ReleaseAsset(
+                        name,
+                        downloadUri,
+                        assetElement.TryGetProperty("id", out var idElement) && idElement.TryGetInt64(out var assetId)
+                            ? assetId
+                            : 0));
                 }
             }
 
@@ -895,16 +912,83 @@ internal sealed class UpdateService
         return client;
     }
 
-    private static async Task DownloadFileAsync(Uri uri, string path, CancellationToken cancellationToken)
+    /// <summary>Builds the GitHub API endpoint for one release asset.</summary>
+    /// <param name="assetId">Numeric id from the release JSON.</param>
+    internal static Uri BuildApiAssetUri(long assetId) => new(string.Format(
+        CultureInfo.InvariantCulture,
+        ApiAssetUrlFormat,
+        RepositorySlug,
+        assetId));
+
+    /// <summary>
+    /// True when a failed browser-asset download is worth retrying through the GitHub API asset
+    /// endpoint: transport failures (no status), server errors, rate limiting and forbidden
+    /// responses. Client errors such as 404 are not retried.
+    /// </summary>
+    /// <param name="statusCode">Status reported by the failed request, or null for transport failures.</param>
+    internal static bool ShouldRetryViaApi(HttpStatusCode? statusCode) =>
+        statusCode is null
+        || (int)statusCode >= 500
+        || statusCode == HttpStatusCode.TooManyRequests
+        || statusCode == HttpStatusCode.Forbidden;
+
+    /// <summary>True when the API fallback is both allowed and possible for this asset.</summary>
+    /// <param name="assetId">Numeric id from the release JSON; zero means no id is known.</param>
+    /// <param name="statusCode">Status reported by the failed browser download, or null.</param>
+    internal static bool CanRetryViaApi(long assetId, HttpStatusCode? statusCode) =>
+        assetId > 0 && ShouldRetryViaApi(statusCode);
+
+    private static async Task DownloadFileAsync(Uri uri, long assetId, string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await DownloadFileFromUriAsync(uri, path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception) when (CanRetryViaApi(assetId, exception.StatusCode))
+        {
+            await DownloadFileFromApiAsync(assetId, path, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task DownloadFileFromUriAsync(Uri uri, string path, CancellationToken cancellationToken)
     {
         using var response = await _httpClient
             .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
-            throw new HttpRequestException($"HTTP {(int)response.StatusCode} while downloading {uri.Host}.");
+            throw new HttpRequestException(
+                $"HTTP {(int)response.StatusCode} while downloading {uri.Host}.",
+                inner: null,
+                response.StatusCode);
         }
 
+        await CopyResponseToFileAsync(response, path, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task DownloadFileFromApiAsync(long assetId, string path, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildApiAssetUri(assetId));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
+        using var response = await _httpClient
+            .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+            .ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new HttpRequestException(
+                $"HTTP {(int)response.StatusCode} while downloading GitHub API asset {assetId}.",
+                inner: null,
+                response.StatusCode);
+        }
+
+        await CopyResponseToFileAsync(response, path, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task CopyResponseToFileAsync(
+        HttpResponseMessage response,
+        string path,
+        CancellationToken cancellationToken)
+    {
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         await using var destination = new FileStream(
             path,

@@ -1,12 +1,19 @@
 ## What and why
 
-<!-- One paragraph. Link the issue if there is one. -->
+<!-- One paragraph. Link the issue and the spec in docs/specs/ if there is one. -->
+
+## Spec and tests (TDD)
+
+- Spec: <!-- docs/specs/NNNN-... or "no behaviour change: ..." -->
+- [ ] Every acceptance criterion in the spec maps to a test (or a documented manual check).
+- [ ] The new tests failed before the implementation (show the red run locally or in a draft PR).
+- [ ] CI coverage floor passes and coverage did not decrease in the touched files.
 
 ## How verified
 
 <!-- Exact commands and results, not "it builds". -->
 - `dotnet build windows/ItsycalForWindows.sln -c Debug -p:Platform=x64` — exit code:
-- `dotnet test windows/tests/ItsycalForWindows.Tests.csproj -c Debug` — exit code:
+- `dotnet test windows/tests/ItsycalForWindows.Tests.csproj -c Debug --collect:"XPlat Code Coverage" --settings windows/tests/coverlet.runsettings` — exit code / line coverage:
 - Other checks (installer, Command Palette behaviour):
 
 ## Risk and rollback
@@ -18,7 +25,7 @@
 
 - [ ] Changes stay inside `windows/` (or the matching docs); no macOS sources reintroduced.
 - [ ] CLSID is unchanged in `ItsycalForWindows.cs` and `Package.appxmanifest`.
-- [ ] No telemetry or network code; event content is not logged.
+- [ ] No telemetry; network usage matches `docs/adr/0002-calendar-providers-and-network.md`; event content is not logged.
 - [ ] New NuGet packages are recorded in `windows/THIRD-PARTY-NOTICES.md`.
 - [ ] No `bin/`, `obj/`, `publish/`, certificates or packages in the diff.
-- [ ] README/ADR updated when behaviour or a decision changed.
+- [ ] README/ADR/spec updated when behaviour or a decision changed.

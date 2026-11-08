@@ -26,19 +26,39 @@ which is not part of this repository anymore.
   ClassId`).
 - Never commit `bin/`, `obj/`, generated packages, certificates, `*.msix`, `publish/`, or
   `windows/artifacts/` output.
-- Do not add telemetry or network calls. Calendar data never leaves the machine; do not log
-  event titles.
+- Do not add telemetry. Network access is limited to the self-update check and to calendar
+  providers the user explicitly enables, as decided in `docs/adr/0002-calendar-providers-and-network.md`.
+  Calendar data never leaves the machine except through a provider the user configured, and
+  event content is never logged.
 - Ask before changing the MSIX identity (`Name`, `Publisher`, version), the WinGet package
   identifier, or the signing story — all are release-sensitive.
 - Verify before reporting: a build/`dotnet test` exit code is evidence; "should work" is
   not. For UI claims, state what was actually observed.
 
+## Spec-first and TDD
+
+Behaviour changes start from a spec, not from code:
+
+1. Write or update `docs/specs/NNNN-<slug>.md` (template: `docs/specs/TEMPLATE.md`): context,
+   acceptance criteria, and the test plan that maps every criterion to a test or a documented
+   manual check. Cross-cutting decisions still go in `docs/adr/`.
+2. Write the failing tests for the acceptance criteria first (or in the same change and shown
+   red locally/in a draft PR). A change is not ready while a criterion has no test.
+3. Keep pure decision logic in testable helpers; network/UI edges get a structural test or a
+   manual verification recorded in the PR/checkpoint.
+4. CI is the gate: build, the full test suite with coverage, the coverage floor and MSIX
+   packaging must be green before merge. Quote the CI run in the PR.
+
 ## Build and verify
 
 ```powershell
 dotnet build windows/ItsycalForWindows.sln -c Debug -p:Platform=x64
-dotnet test windows/tests/ItsycalForWindows.Tests.csproj -c Debug
+dotnet test windows/tests/ItsycalForWindows.Tests.csproj -c Debug --collect:"XPlat Code Coverage" --settings windows/tests/coverlet.runsettings
 ```
+
+CI (`.github/workflows/windows-build.yml`) runs the same test command, enforces a line
+coverage floor from the Cobertura report and uploads the report as an artifact; MSIX
+packaging and signing run after the tests.
 
 Public releases are signed MSIX packages built per architecture by
 `windows/scripts/Build-Release.ps1`. Command Palette discovers extensions only through the
@@ -49,8 +69,9 @@ builds, packages and tests every PR.
 ## Commits and PRs
 
 Conventional Commits (`feat(windows): ...`, `fix(windows): ...`, `docs: ...`), one logical
-change per PR, PR description with the exact verification commands and results. Keep
-`docs/adr/` up to date when a decision changes.
+change per PR, PR description with the exact verification commands and results plus the spec
+link. Keep `docs/adr/` up to date when a decision changes, and `docs/specs/` when behaviour
+changes.
 
 ## Decision records
 
