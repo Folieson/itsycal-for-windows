@@ -500,7 +500,7 @@ public sealed class UpdateLogicTests
                 new[] { "github.com", "api.github.com", "github.com", "api.github.com" },
                 handler.Requests.Select(request => request.RequestUri!.Host));
             Assert.Contains("SHA256SUMS.txt", handler.Requests[0].RequestUri!.AbsolutePath, StringComparison.Ordinal);
-            Assert.Contains("SHA256SUMS.txt", handler.Requests[1].RequestUri!.AbsolutePath, StringComparison.Ordinal);
+            Assert.Contains("/assets/7", handler.Requests[1].RequestUri!.AbsolutePath, StringComparison.Ordinal);
             Assert.True(File.Exists(result.MsixPath));
         }
         finally
