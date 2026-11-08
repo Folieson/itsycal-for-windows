@@ -14,11 +14,19 @@ public static class CalendarOnboarding
     public const string CommandSubtitle = "Create the calendar folder and open it in File Explorer";
 
     /// <summary>
-    /// The selected-day empty state: one short line that names the folder (by its documented
-    /// <c>%LOCALAPPDATA%</c> location) and the palette command that opens it.
+    /// First line of the selected-day empty state. This exact sentence is the contract shared with
+    /// UI specs 0003 (AC-5) and 0004 (AC-7); do not append setup guidance to it.
     /// </summary>
-    public const string EmptyStateHint =
-        "No events on this day. Add an .ics file to %LOCALAPPDATA%\\ItsycalForWindows\\calendars or run \"Itsycal: open calendar folder\".";
+    public const string EmptyStateTitle = "No events on this day.";
+
+    /// <summary>
+    /// Second line of the selected-day empty state: the one-line calendars-folder pointer defined by
+    /// UI specs 0003 (AC-5) and 0004 (AC-7), retained until the rest of ONB-101 ships. It stays a
+    /// separate <c>TextBlock</c>; whether each part renders on one visual line is an installed-build
+    /// manual check, not a unit-test claim.
+    /// </summary>
+    public const string EmptyStatePointer =
+        "Calendars folder: %LOCALAPPDATA%\\ItsycalForWindows\\calendars";
 
     /// <summary>Toast shown after the folder was created (if needed) and opened.</summary>
     /// <param name="path">Folder that was opened.</param>

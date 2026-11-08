@@ -7,9 +7,10 @@ namespace ItsycalForWindows.Tests;
 
 /// <summary>
 /// Tests for the calendar-folder onboarding helpers: the folder the palette command creates is
-/// exactly the folder <see cref="IcsEventSource"/> reads, and the discovery strings stay short
-/// enough for the card's single-line empty state. The command itself talks to CmdPal and the
-/// shell, so only its pure inputs are covered here; the toast mapping is checked in review.
+/// exactly the folder <see cref="IcsEventSource"/> reads, the empty state keeps the two-part
+/// contract from UI specs 0003/0004, and every failure path that can be made pure returns a value
+/// instead of throwing. The command itself talks to CmdPal and the shell, so only its pure inputs
+/// are covered here; the toast mapping is checked in review.
 /// </summary>
 public sealed class CalendarFolderTests
 {
@@ -38,9 +39,18 @@ public sealed class CalendarFolderTests
     }
 
     [Fact]
-    public void GetPath_RejectsAnEmptyRoot()
+    public void GetPath_ReturnsAnEmptyPathForAnInvalidRoot()
     {
-        Assert.Throws<ArgumentException>(() => CalendarFolder.GetPath(" "));
+        Assert.Equal(string.Empty, CalendarFolder.GetPath(" "));
+        Assert.Equal(string.Empty, CalendarFolder.GetPath(null));
+    }
+
+    [Fact]
+    public void TryGetDefaultPath_ResolvesTheProfileFolder()
+    {
+        Assert.True(CalendarFolder.TryGetDefaultPath(out var path));
+        Assert.Equal(CalendarFolder.DefaultPath, path);
+        Assert.True(Path.IsPathFullyQualified(path), $"Expected an absolute folder path, got '{path}'.");
     }
 
     [Fact]
@@ -76,6 +86,33 @@ public sealed class CalendarFolderTests
     }
 
     [Fact]
+    public void EnsureCreated_ReturnsFalseWhenAParentIsAFile()
+    {
+        using var folder = new TempIcsFolder();
+        var blocker = folder.Write("blocker", "not a folder");
+        var path = Path.Combine(blocker, "calendars");
+
+        Assert.False(CalendarFolder.EnsureCreated(path));
+        Assert.False(Directory.Exists(path));
+    }
+
+    [Fact]
+    public void EnsureCreated_ReturnsFalseForAnInvalidPath()
+    {
+        Assert.False(CalendarFolder.EnsureCreated(" "));
+        Assert.False(CalendarFolder.EnsureCreated(null));
+    }
+
+    [Fact]
+    public void TryOpenInExplorer_ReturnsFalseForAnInvalidPath()
+    {
+        // No shell process may be started for an invalid path; this is the pure failure half of the
+        // Explorer boundary. A real launch failure is a documented manual check in spec 0005.
+        Assert.False(CalendarFolder.TryOpenInExplorer(" "));
+        Assert.False(CalendarFolder.TryOpenInExplorer(null));
+    }
+
+    [Fact]
     public void CommandTitle_IsThePaletteCommandName()
     {
         Assert.Equal("Itsycal: open calendar folder", CalendarOnboarding.CommandTitle);
@@ -91,16 +128,38 @@ public sealed class CalendarFolderTests
     }
 
     [Fact]
-    public void EmptyState_MentionsTheFolderAndTheCommandOnOneLine()
+    public void EmptyState_IsTheTwoPartContract()
     {
-        var hint = CalendarOnboarding.EmptyStateHint;
+        // The exact contract from UI specs 0003 (AC-5) and 0004 (AC-7): a sentence plus a folder
+        // pointer, rendered as two TextBlocks. Whether each part stays on one visual line is an
+        // installed-build manual check, so this test does not claim it.
+        Assert.Equal("No events on this day.", CalendarOnboarding.EmptyStateTitle);
+        Assert.Equal(
+            "Calendars folder: %LOCALAPPDATA%\\ItsycalForWindows\\calendars",
+            CalendarOnboarding.EmptyStatePointer);
 
-        Assert.Contains(CalendarOnboarding.CommandTitle, hint, StringComparison.Ordinal);
-        Assert.Contains(IcsEventSource.FolderName, hint, StringComparison.Ordinal);
-        Assert.Contains("LOCALAPPDATA", hint, StringComparison.Ordinal);
-        Assert.DoesNotContain("\n", hint);
-        Assert.DoesNotContain("\r", hint);
-        Assert.True(hint.Length <= 160, $"The empty state is {hint.Length} characters; keep it one short line.");
+        Assert.Contains(IcsEventSource.FolderName, CalendarOnboarding.EmptyStatePointer, StringComparison.Ordinal);
+        Assert.Contains("LOCALAPPDATA", CalendarOnboarding.EmptyStatePointer, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n", CalendarOnboarding.EmptyStateTitle);
+        Assert.DoesNotContain("\r", CalendarOnboarding.EmptyStateTitle);
+        Assert.DoesNotContain("\n", CalendarOnboarding.EmptyStatePointer);
+        Assert.DoesNotContain("\r", CalendarOnboarding.EmptyStatePointer);
+        Assert.True(
+            CalendarOnboarding.EmptyStatePointer.Length <= 160,
+            $"The folder pointer is {CalendarOnboarding.EmptyStatePointer.Length} characters; keep it short.");
+    }
+
+    [Fact]
+    public void EmptyState_DoesNotUseTheOldCombinedSentence()
+    {
+        const string oldCombined =
+            "No events on this day. Add an .ics file to %LOCALAPPDATA%\\ItsycalForWindows\\calendars or run \"Itsycal: open calendar folder\".";
+
+        Assert.NotEqual(oldCombined, CalendarOnboarding.EmptyStateTitle);
+        Assert.NotEqual(oldCombined, CalendarOnboarding.EmptyStatePointer);
+        Assert.DoesNotContain("Add an .ics file", CalendarOnboarding.EmptyStatePointer, StringComparison.Ordinal);
+        Assert.DoesNotContain("Add an .ics file", CalendarOnboarding.EmptyStateTitle, StringComparison.Ordinal);
+        Assert.NotEqual(CalendarOnboarding.EmptyStateTitle, CalendarOnboarding.EmptyStatePointer);
     }
 
     [Fact]

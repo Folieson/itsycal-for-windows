@@ -1,4 +1,3 @@
-using System;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
 namespace ItsycalForWindows.Services;
@@ -17,19 +16,11 @@ internal sealed class CalendarFolderCommand : InvokableCommand
     /// <inheritdoc />
     public override CommandResult Invoke()
     {
-        string path;
-#pragma warning disable CA1031 // A failure must become a toast, not an exception across the COM boundary.
-        try
+        if (!CalendarFolder.TryGetDefaultPath(out var path))
         {
-            path = CalendarFolder.DefaultPath;
-        }
-        catch (Exception)
-        {
-            // Resolving the profile path is normally a pure environment read; if it fails there is
-            // no path to create or open, and the user still gets an answer.
+            // A profile with no local application-data folder has no folder to create or open.
             return CommandResult.ShowToast(CalendarOnboarding.UnavailableFolderToast);
         }
-#pragma warning restore CA1031
 
         if (!CalendarFolder.EnsureCreated(path))
         {

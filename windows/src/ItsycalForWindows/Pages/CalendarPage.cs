@@ -1043,7 +1043,21 @@ internal sealed partial class CalendarPage : ContentPage
 
         if (events.Count == 0)
         {
-            body.Add((JsonNode)TextBlock(CalendarOnboarding.EmptyStateHint, size: "small", subtle: true, spacing: RowSpacing, wrap: true));
+            // Two-part empty state defined by specs 0003 (AC-5) and 0004 (AC-7): the exact sentence
+            // on the first line and the calendars-folder pointer as its own TextBlock on the second.
+            // Whether each line stays visually unwrapped is an installed-build manual check.
+            body.Add((JsonNode)TextBlock(
+                CalendarOnboarding.EmptyStateTitle,
+                size: "small",
+                subtle: true,
+                spacing: RowSpacing,
+                wrap: true));
+            body.Add((JsonNode)TextBlock(
+                CalendarOnboarding.EmptyStatePointer,
+                size: "small",
+                subtle: true,
+                spacing: "none",
+                wrap: true));
             return;
         }
 
