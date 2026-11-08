@@ -22,8 +22,8 @@ internal sealed class UpdateSettings : JsonSettingsManager
     private readonly ToggleSetting _autoCheck = new(
         Namespaced(nameof(AutoCheck)),
         "Check for updates automatically",
-        "Check GitHub Releases for a newer version at most once every 24 hours.",
-        true);
+        "Check GitHub Releases for a newer version at most once every 24 hours. Off by default; enable it to allow the automatic check.",
+        false);
 
     private readonly ToggleSetting _autoInstall = new(
         Namespaced(nameof(AutoInstall)),

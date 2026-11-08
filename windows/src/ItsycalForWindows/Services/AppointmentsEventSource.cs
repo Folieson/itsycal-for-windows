@@ -129,6 +129,8 @@ internal sealed class AppointmentsEventSource : IEventSource
         options.FetchProperties.Add(AppointmentProperties.Duration);
         options.FetchProperties.Add(AppointmentProperties.AllDay);
         options.FetchProperties.Add(AppointmentProperties.Location);
+        options.FetchProperties.Add(AppointmentProperties.OnlineMeetingLink);
+        options.FetchProperties.Add(AppointmentProperties.Details);
 
         // Hidden calendars (for example one the user unchecked in the Calendar app) stay hidden.
         options.IncludeHidden = false;

@@ -1,4 +1,4 @@
-﻿# Itsycal for Windows РІР‚вЂќ extension source
+# Itsycal for Windows РІР‚вЂќ extension source
 
 This folder contains the Windows product: a PowerToys Command Palette extension written in
 C#/.NET 10. It contributes a dock band with the current date and a flyout month calendar
@@ -13,7 +13,8 @@ with read-only events from the Windows appointment store.
 | PowerToys 0.102+ | Command Palette host |
 
 A code-signing certificate is only needed to produce a trusted release package; development
-packages use an ephemeral self-signed certificate. See `docs/SIGNING.md` at the repository
+packages use the persistent development certificate (`ItsycalForWindows-Dev`); a trusted
+code-signing certificate is only required for a public trusted release. See `docs/SIGNING.md` at the repository
 root.
 
 ## Build and test
@@ -113,7 +114,8 @@ place, because each build carries a higher package revision.
 
 Events come from `Windows.ApplicationModel.Appointments` in read-only mode
 (`AppointmentStoreAccessType.AllCalendarsReadOnly`). The extension never writes to the
-calendar, makes no network calls, and logs no event content. Without the capability, a
+calendar and logs no event content. Network access is limited to opt-in self-update checks and
+future user-configured providers (ADR 0002). Without the capability, a
 packaged run simply shows no events; the calendar still works.
 
 ## Troubleshooting
