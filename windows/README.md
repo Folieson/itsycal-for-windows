@@ -2,7 +2,9 @@
 
 This folder contains the Windows product: a PowerToys Command Palette extension written in
 C#/.NET 10. It contributes a dock band with the current date and a flyout month calendar
-with read-only events from the Windows appointment store.
+with read-only events from the Windows appointment store. The calendar models and event
+providers live in the shared `ItsycalForWindows.Core` library; the extension project keeps
+the Command Palette host, pages, settings and updater.
 
 ## Prerequisites
 
@@ -27,7 +29,17 @@ dotnet test  windows/tests/ItsycalForWindows.Tests.csproj -c Debug
 ```
 
 The default configuration builds the **MSIX development package** (useful for local
-installation and debugging).
+installation and debugging). The solution and `ItsycalForWindows.Core` define both `x64`
+and `ARM64` configurations, matching the app's `win-x64;win-arm64` runtime identifiers;
+pass `-p:Platform=ARM64` to build that target. The test project is x64-only.
+
+### Tests and coverage
+
+`dotnet test` covers the shared core (calendar grid, event ranges, ICS parsing, composite
+merge) and the app's update logic. Coverage is collected from both the extension and the
+Core assembly (`windows/tests/coverlet.runsettings`) and enforced on the aggregate line
+rate: the post-extraction baseline (2026-11-08) is **37.4%** (Core 68.1%, app 21.3%)
+against the 30% floor. Per-assembly thresholds are a follow-up.
 
 ## Release packages (signed MSIX)
 
@@ -72,14 +84,16 @@ The identity version is derived, never hand-maintained:
 - **Release**: the tag is the source of truth. `v1.2.3` becomes package version `1.2.3.0`;
   the release workflow stamps the manifest, the project metadata and the WinGet manifests
   before packaging.
-- **Development build**: `.github/workflows/windows-build.yml` stamps the revision from the
-  GitHub run number (`<newest release X.Y.Z>.<run+1>`), so every artifact is newer than the previous one and
-  `Add-AppxPackage` upgrades in place instead of failing with `0x80073CFB`.
+- **Development build**: `.github/workflows/windows-build.yml` takes the newest `vX.Y.Z`
+  release tag as the base and stamps `X.Y.Z.<run+1>` (the GitHub run number plus one),
+  instead of a fixed `1.0.0.<run>`. Every artifact is newer than the latest release, so
+  `Add-AppxPackage` upgrades in place instead of failing with `0x80073CFB`. With no `v*`
+  tag the build fails rather than producing a package below the released version.
 - **Local**: `.\windows\scripts\Set-PackageVersion.ps1 -Version 1.2.3.0` (or
   `-Revision 42` to keep the current base) before building.
 
-The committed manifest keeps the current release base; CI stamps a copy in the runner's
-workspace and never commits it.
+The committed manifest is not rewritten by development builds: it keeps the base identity
+(`1.0.0.0`), and CI stamps only a copy in the runner's workspace, never a commit.
 
 ## Install a development build (MSIX)
 
@@ -101,15 +115,18 @@ place, because each build carries a higher package revision.
 
 | Path | Purpose |
 |---|---|
+| `src/ItsycalForWindows.Core/` | Shared calendar core (`ItsycalForWindows.Core.dll`): models and event providers, no UI or packaging. |
+| `src/ItsycalForWindows.Core/Models/` | Calendar month grid, week rows, day/event models (pure logic). |
+| `src/ItsycalForWindows.Core/Services/` | `IEventSource` boundary, ICS/appointment/composite sources, range helpers. |
 | `src/ItsycalForWindows/Program.cs` | Out-of-process COM server host. Do not change the hosting pattern. |
 | `src/ItsycalForWindows/ItsycalForWindows.cs` | `IExtension` implementation; carries the CLSID. |
 | `src/ItsycalForWindows/ItsycalForWindowsCommandsProvider.cs` | Commands, dock band, cached page instance. |
-| `src/ItsycalForWindows/Models/` | Calendar month grid, week rows, day/event models (pure logic). |
 | `src/ItsycalForWindows/Pages/` | Dock item and Adaptive Card calendar flyout. |
-| `src/ItsycalForWindows/Services/` | Appointment-store access and event range helpers. |
-| `tests/` | Unit tests for the pure logic. |
+| `src/ItsycalForWindows/Services/` | Updater, demo appointments and null source; provider logic lives in Core. |
+| `src/ItsycalForWindows/Helpers/` | Settings and update preferences. |
+| `tests/` | Unit tests for the shared core and the update logic. |
 | `scripts/` | Development tooling: MSIX install script, release build/sign script, icon generation. |
-| `Package.appxmanifest` | MSIX identity, COM server, CmdPal app extension, `appointmentsSystem` capability. |
+| `src/ItsycalForWindows/Package.appxmanifest` | MSIX identity, COM server, CmdPal app extension, `appointmentsSystem` capability. |
 
 ## Events and privacy
 
