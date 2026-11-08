@@ -352,6 +352,27 @@ public static class IcsParser
             }
         }
 
+        if (properties.TryGetValue("X-GOOGLE-CONFERENCE", out var googleConference))
+        {
+            var value = googleConference.Value.Trim();
+            if (IsMeetingUrl(value))
+            {
+                return value;
+            }
+        }
+
+        foreach (var textProperty in new[] { "DESCRIPTION", "LOCATION" })
+        {
+            if (properties.TryGetValue(textProperty, out var textPropertyValue))
+            {
+                var meetingUrl = FindMeetingUrl(Unescape(textPropertyValue.Value));
+                if (meetingUrl is not null)
+                {
+                    return meetingUrl;
+                }
+            }
+        }
+
         if (properties.TryGetValue("URL", out var url))
         {
             var value = url.Value.Trim();
@@ -364,6 +385,34 @@ public static class IcsParser
         return null;
     }
 
+
+    private static string? FindMeetingUrl(string text)
+    {
+        foreach (var candidate in text.Split([' ', '\t', '\r', '\n', '<', '>', '"', '(', ')'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (IsMeetingUrl(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsMeetingUrl(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+        {
+            return false;
+        }
+
+        var host = uri.Host.ToLowerInvariant();
+        return host is "meet.google.com" or "teams.microsoft.com" or "teams.live.com" or "zoom.us" or "webex.com" or "ktalk.ru"
+            || host.EndsWith(".zoom.us", StringComparison.Ordinal)
+            || host.EndsWith(".webex.com", StringComparison.Ordinal)
+            || host.EndsWith(".ktalk.ru", StringComparison.Ordinal);
+    }
     private static bool TryParseDateTime(
         string value,
         IReadOnlyDictionary<string, string> parameters,
@@ -427,6 +476,7 @@ public static class IcsParser
             : new DateTimeOffset(wallClock, zone.GetUtcOffset(wallClock));
         return true;
     }
+
 
     private static bool TryParseDateTime(
         ContentLine line,
