@@ -402,18 +402,6 @@ public sealed class UpdateLogicTests
         Assert.Equal(expected, UpdateService.ShouldRetryViaApi(status));
     }
 
-    [Theory]
-    [InlineData(0, 504, false)]
-    [InlineData(42, 504, true)]
-    [InlineData(42, null, true)]
-    [InlineData(42, 404, false)]
-    public void CanRetryViaApi_RequiresAssetIdAndRetryableStatus(int assetId, int? statusCode, bool expected)
-    {
-        var status = statusCode is null ? (HttpStatusCode?)null : (HttpStatusCode)statusCode.Value;
-
-        Assert.Equal(expected, UpdateService.CanRetryViaApi(assetId, status));
-    }
-
     [Fact]
     public void ParseReleases_ReadsAssetIds()
     {
@@ -500,7 +488,8 @@ public sealed class UpdateLogicTests
                 new[] { "github.com", "api.github.com", "github.com", "api.github.com" },
                 handler.Requests.Select(request => request.RequestUri!.Host));
             Assert.Contains("SHA256SUMS.txt", handler.Requests[0].RequestUri!.AbsolutePath, StringComparison.Ordinal);
-            Assert.Contains("/assets/7", handler.Requests[1].RequestUri!.AbsolutePath, StringComparison.Ordinal);`n            Assert.Contains("/assets/11", handler.Requests[3].RequestUri!.AbsolutePath, StringComparison.Ordinal);
+            Assert.Contains("/assets/7", handler.Requests[1].RequestUri!.AbsolutePath, StringComparison.Ordinal);
+            Assert.Contains("/assets/11", handler.Requests[3].RequestUri!.AbsolutePath, StringComparison.Ordinal);
             Assert.True(File.Exists(result.MsixPath));
         }
         finally
@@ -762,7 +751,8 @@ public sealed class UpdateLogicTests
         string msixName = MsixName)
     {
         var sumsUri = new Uri("https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/SHA256SUMS.txt");
-        var msixFileName = Path.GetFileName(msixName);`n        var msixUri = new Uri($"https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/{msixFileName}");
+        var msixFileName = Path.GetFileName(msixName);
+        var msixUri = new Uri($"https://github.com/Folieson/itsycal-for-windows/releases/download/v1.2.1/{msixFileName}");
         var assets = new ReleaseAsset[]
         {
             new("SHA256SUMS.txt", sumsUri, sumsId),

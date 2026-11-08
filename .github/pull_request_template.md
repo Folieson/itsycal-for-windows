@@ -32,7 +32,8 @@
 
 ## Checklist
 
-- [ ] Branch is based on current `master`; the PR diff contains only this change (no stacked branches).`n- [ ] Changes stay inside `windows/` (or the matching docs); no macOS sources reintroduced.
+- [ ] Branch is based on current `master`; the PR diff contains only this change (no stacked branches).
+- [ ] Changes stay inside `windows/` (or the matching docs); no macOS sources reintroduced.
 - [ ] CLSID is unchanged in `ItsycalForWindows.cs` and `Package.appxmanifest`.
 - [ ] No telemetry; network usage matches `docs/adr/0002-calendar-providers-and-network.md`; event content is not logged.
 - [ ] New NuGet packages are recorded in `windows/THIRD-PARTY-NOTICES.md`.
