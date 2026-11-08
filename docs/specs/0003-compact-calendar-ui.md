@@ -29,6 +29,14 @@ a row that already has a `selectAction`, so a row shows a video **indicator** an
 Join button lives in the expanded details. Per-element accessible names and arrow-key day
 navigation are not exposed by this surface; they are tracked separately (see Out of scope).
 
+- **Light translucency:** the host already paints the palette surface with an acrylic backdrop
+  (`TransientSurface.xaml` → `AlwaysActiveDesktopAcrylicBackdrop` in the installed Command
+  Palette). The extension must let that material show through: no opaque full-card
+  background, no fake semi-transparent colours (Adaptive Cards colour styles have no alpha),
+  and readable contrast over the acrylic in both themes. If the host renders a solid surface
+  (backdrop disabled or a remote session), the card must still look intentional as a solid
+  surface; custom acrylic tint/opacity is host-owned.
+
 ## Acceptance criteria
 
 - [ ] **AC-1 — compact composition:** On an installed build at the default palette window
@@ -60,6 +68,13 @@ navigation are not exposed by this surface; they are tracked separately (see Out
       day grouping live in pure helpers with unit tests; card-level claims are verified with
       the deterministic fixture and screenshots above.
 
+- [ ] **AC-7 — light translucency:** on an installed build the host acrylic is visible through
+      the card (no opaque full-card panel fill and no fake alpha), text and controls keep
+      readable contrast over the material in dark and light themes, and a solid-surface
+      fallback (backdrop disabled) still renders intentionally. Verified with read-back
+      screenshots; the material strength itself is host-owned and cannot be set by the
+      extension.
+
 ## Test plan
 
 | AC | Check | Kind |
@@ -70,6 +85,7 @@ navigation are not exposed by this surface; they are tracked separately (see Out
 | AC-4 | Dark/light screenshots at 800×480 and 640 DIP; inspect clipping of time/title/Join/Copy labels and that the host acrylic is visible through the card (no opaque panel fill, readable contrast) | manual + screenshot |
 | AC-5 | Empty day and loading screenshots; no long onboarding text repeated on empty days | manual + screenshot |
 | AC-6 | Unit tests for truncation, grouping and action derivation in a pure layout helper | unit |
+| AC-7 | Dark/light installed-build screenshots: host acrylic visible through the card, no opaque full-card fill/fake alpha, readable contrast; check the solid-surface fallback if the backdrop is unavailable | manual + screenshot |
 
 The fixture is DEBUG-only (or an `.ics` file) and deterministic: exactly three events today,
 fixed titles/times/locations/notes, one `https://meet.google.com/...` link, one event without
