@@ -14,9 +14,10 @@
 - PO / analyst: <!-- who owned scope and authored the spec -->
 - Developer: <!-- implementer -->
 - Tester verification: <!-- role/agent, date, verdict, evidence -->
+- Design review (UI changes): <!-- role/agent, date, verdict, screenshot paths -->
 - Spec review: <!-- reviewer/agent, date, verdict, link -->
 - Code review: <!-- reviewer/agent, date, verdict, link -->
-- [ ] The tester and both reviewers were different agents from the author and from each other.
+- [ ] The tester, design reviewer (UI) and both reviewers were different agents from the author and from each other.
 - [ ] Every blocking finding was resolved or explicitly deferred with the user's agreement.
 ## How verified
 
