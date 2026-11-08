@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="ItsycalForWindows.Flyout.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!-- RootHost fills the window; RootGrid is the measured content and is what the
+         content-hugging resize measures. Keeping them separate lets the DPI scale
+         simulation (ITSYCAL_FLYOUT_UI_SCALE) lay out at 360 DIP and scale the visual. -->
+    <Grid x:Name="RootHost" Background="Transparent">
+        <Grid x:Name="RootGrid" Background="Transparent">
+            <Border
+                x:Name="Card"
+                Margin="12"
+                Background="{ThemeResource AcrylicInAppFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="12">
+                <Grid x:Name="CardContent" Padding="14,12,14,12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Month header: title on the left, navigation on the right. All nav
+                         targets are 32 x 32 DIP; Today is a labelled button, not a label. -->
+                    <Grid x:Name="MonthHeader" Grid.Row="0" Height="32">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            x:Name="MonthTitle"
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            FontWeight="SemiBold"
+                            Text="November 2026" />
+                        <StackPanel
+                            Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="4"
+                            VerticalAlignment="Center">
+                            <Button
+                                x:Name="PreviousMonthButton"
+                                Width="32"
+                                Height="32"
+                                Padding="0"
+                                AutomationProperties.Name="Previous month"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Content="&#xE76B;"
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="12"
+                                UseSystemFocusVisuals="True" />
+                            <Button
+                                x:Name="TodayButton"
+                                Height="32"
+                                MinWidth="52"
+                                Padding="10,0"
+                                AutomationProperties.Name="Today"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                Content="Today"
+                                CornerRadius="6"
+                                FontSize="12"
+                                UseSystemFocusVisuals="True" />
+                            <Button
+                                x:Name="NextMonthButton"
+                                Width="32"
+                                Height="32"
+                                Padding="0"
+                                AutomationProperties.Name="Next month"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Content="&#xE76C;"
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="12"
+                                UseSystemFocusVisuals="True" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Weekday header -->
+                    <Grid
+                        x:Name="WeekdayHeader"
+                        Grid.Row="1"
+                        Margin="0,4,0,2" />
+
+                    <!-- Month day cells -->
+                    <Grid
+                        x:Name="DayGrid"
+                        Grid.Row="2"
+                        Margin="0,0,0,10"
+                        ColumnSpacing="1"
+                        RowSpacing="1" />
+
+                    <!-- Selected day agenda. Details are inserted into AgendaPanel directly
+                         under the selected row; there is no panel after the agenda. -->
+                    <Grid Grid.Row="3">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Grid x:Name="AgendaHeaderRow" Grid.Row="0" Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                x:Name="AgendaHeader"
+                                FontSize="13"
+                                FontWeight="SemiBold"
+                                Text="Today" />
+                            <TextBlock
+                                x:Name="AgendaDate"
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                FontSize="12"
+                                Text="Nov 8" />
+                        </Grid>
+                        <ScrollViewer
+                            x:Name="AgendaScroll"
+                            Grid.Row="1"
+                            HorizontalScrollMode="Disabled"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto"
+                            VerticalScrollMode="Auto">
+                            <StackPanel x:Name="AgendaPanel" Spacing="4" />
+                        </ScrollViewer>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

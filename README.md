@@ -158,3 +158,11 @@ Free code signing provided by [SignPath.io](https://about.signpath.io/), certifi
   folder manually if desired.
 - **Reproducibility:** every release artifact is produced by GitHub Actions from the tagged
   commit; the workflow, test suite and packaging scripts are in this repository.
+
+## Independence
+
+ItsyCal for Windows is an independent project. It is not affiliated with or endorsed by the
+ItsyCal macOS app or its author; the project was inspired by ItsyCal and retains the upstream MIT
+attribution in [LICENSE.txt](LICENSE.txt). The planned v2.0.0 rebrand will ship under the chosen
+name **Calwren**, recorded in
+[docs/adr/0004-rebrand-independent-product.md](docs/adr/0004-rebrand-independent-product.md).
