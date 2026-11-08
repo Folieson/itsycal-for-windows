@@ -542,14 +542,11 @@ internal sealed class UpdateService
                 return Task.FromResult(UpdateApplyResult.Failed("The update package is not an MSIX file."));
             }
 
-            var checksumError = VerifyPackageChecksumForApply(fullMsixPath, out var verifiedSha256);
-            if (checksumError is not null)
+            var stagingFailure = TryStageUpdaterScript(fullMsixPath, LogFilePath, out var scriptPath);
+            if (stagingFailure is not null)
             {
-                return Task.FromResult(UpdateApplyResult.Failed(checksumError));
+                return Task.FromResult(stagingFailure);
             }
-
-            var scriptPath = Path.Combine(Path.GetDirectoryName(fullMsixPath)!, UpdaterScriptName);
-            File.WriteAllBytes(scriptPath, BuildUpdaterScriptBytes(fullMsixPath, LogFilePath, verifiedSha256));
 
             var startInfo = new ProcessStartInfo
             {
@@ -868,6 +865,27 @@ internal sealed class UpdateService
         return safe.Length == 0 ? "unknown" : safe;
     }
 
+    /// <summary>
+    /// Verifies the package against its adjacent checksum and writes the BOM-marked updater
+    /// script. This is the seam used by <see cref="ApplyAsync"/> so the fail-closed and BOM
+    /// behaviour is covered without starting a process.
+    /// </summary>
+    /// <param name="fullMsixPath">Absolute path of the verified package.</param>
+    /// <param name="logPath">Update log the generated script appends to.</param>
+    /// <param name="scriptPath">Path of the generated script when staging succeeds.</param>
+    /// <returns>A failure result, or null on success.</returns>
+    internal static UpdateApplyResult? TryStageUpdaterScript(string fullMsixPath, string logPath, out string scriptPath)
+    {
+        scriptPath = Path.Combine(Path.GetDirectoryName(fullMsixPath)!, UpdaterScriptName);
+        var checksumError = VerifyPackageChecksumForApply(fullMsixPath, out var verifiedSha256);
+        if (checksumError is not null)
+        {
+            return UpdateApplyResult.Failed(checksumError);
+        }
+
+        File.WriteAllBytes(scriptPath, BuildUpdaterScriptBytes(fullMsixPath, logPath, verifiedSha256));
+        return null;
+    }
     /// <summary>
     /// Re-verifies the package against the <c>SHA256SUMS.txt</c> stored next to it immediately
     /// before staging the updater. Fails closed when the checksum file or entry is missing or

@@ -849,6 +849,44 @@ public sealed class UpdateLogicTests
     }
 
     [Fact]
+    public void TryStageUpdaterScript_WritesBomAndFailsClosed()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "itsycal-stage-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var msix = Path.Combine(folder, "ItsycalForWindows_1.2.2.0_x64.msix");
+            var scriptPath = Path.Combine(folder, "apply-update.ps1");
+            var bytes = Encoding.UTF8.GetBytes("stage-package-content");
+            File.WriteAllBytes(msix, bytes);
+
+            var failure = UpdateService.TryStageUpdaterScript(msix, Path.Combine(folder, "update.log"), out _);
+
+            Assert.NotNull(failure);
+            Assert.False(File.Exists(scriptPath));
+
+            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            File.WriteAllText(
+                Path.Combine(folder, "SHA256SUMS.txt"),
+                hash + "  ItsycalForWindows_1.2.2.0_x64.msix" + Environment.NewLine);
+            var success = UpdateService.TryStageUpdaterScript(msix, Path.Combine(folder, "update.log"), out var staged);
+
+            Assert.Null(success);
+            Assert.True(File.Exists(staged));
+            var scriptBytes = File.ReadAllBytes(staged);
+            Assert.Equal(0xEF, scriptBytes[0]);
+            Assert.Equal(0xBB, scriptBytes[1]);
+            Assert.Equal(0xBF, scriptBytes[2]);
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+    [Fact]
     public void BuildUpdaterScriptBytes_StartsWithUtf8Bom()
     {
         var bytes = UpdateService.BuildUpdaterScriptBytes(
