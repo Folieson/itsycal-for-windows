@@ -7,13 +7,12 @@ using Xunit;
 namespace ItsycalForWindows.Tests;
 
 /// <summary>
-/// Tests for the deliberate OAuth/CalDAV skeletons: they must report an explicit state and must
+/// Tests for the deliberate CalDAV/Graph skeletons: they must report an explicit state and must
 /// never fabricate events or perform I/O.
 /// </summary>
 public sealed class SkeletonProviderTests
 {
     [Theory]
-    [InlineData(ProviderKind.Google)]
     [InlineData(ProviderKind.MicrosoftGraph)]
     [InlineData(ProviderKind.YandexCalDav)]
     [InlineData(ProviderKind.GenericCalDav)]
@@ -30,7 +29,6 @@ public sealed class SkeletonProviderTests
     }
 
     [Theory]
-    [InlineData(ProviderKind.Google)]
     [InlineData(ProviderKind.MicrosoftGraph)]
     [InlineData(ProviderKind.YandexCalDav)]
     [InlineData(ProviderKind.GenericCalDav)]
@@ -46,7 +44,6 @@ public sealed class SkeletonProviderTests
     }
 
     [Theory]
-    [InlineData(ProviderKind.Google)]
     [InlineData(ProviderKind.MicrosoftGraph)]
     [InlineData(ProviderKind.YandexCalDav)]
     [InlineData(ProviderKind.GenericCalDav)]
@@ -62,7 +59,6 @@ public sealed class SkeletonProviderTests
     }
 
     [Theory]
-    [InlineData(ProviderKind.Google)]
     [InlineData(ProviderKind.MicrosoftGraph)]
     [InlineData(ProviderKind.YandexCalDav)]
     [InlineData(ProviderKind.GenericCalDav)]
@@ -82,19 +78,18 @@ public sealed class SkeletonProviderTests
     [Fact]
     public async Task Skeleton_ProbeHonorsCancellation()
     {
-        var provider = new GoogleCalendarProvider();
+        var provider = new MicrosoftGraphProvider();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => provider.ProbeAsync(
-                ProviderRequest.Probe(ProviderAccount.Create(ProviderKind.Google, "Account")),
+                ProviderRequest.Probe(ProviderAccount.Create(ProviderKind.MicrosoftGraph, "Account")),
                 cancellation.Token));
     }
 
     private static ICalendarProvider CreateProvider(ProviderKind kind) => kind switch
     {
-        ProviderKind.Google => new GoogleCalendarProvider(),
         ProviderKind.MicrosoftGraph => new MicrosoftGraphProvider(),
         ProviderKind.YandexCalDav => new YandexCalDavProvider(),
         ProviderKind.GenericCalDav => new GenericCalDavProvider(),

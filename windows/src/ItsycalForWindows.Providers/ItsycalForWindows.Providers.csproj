@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Calendar provider framework (ADR 0002): account storage, provider contracts, the read-only
-    ICS subscription provider and explicit not-implemented skeletons for the OAuth/CalDAV
-    providers. No UI, no packaging and no third-party graph/auth SDKs; the extension and the
-    standalone flyout consume it as a plain library.
+    Calendar provider framework (ADR 0002/0005): account storage, provider contracts, the
+    read-only ICS subscription provider, the read-only Google Calendar OAuth PKCE provider and
+    explicit not-implemented skeletons for Graph/CalDAV. No UI, no packaging and no third-party
+    graph/auth SDKs; the extension and the standalone flyout consume it as a plain library.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>

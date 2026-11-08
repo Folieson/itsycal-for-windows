@@ -36,6 +36,12 @@ public sealed record ProviderSecret
     /// <summary>Optional access-token expiry in UTC.</summary>
     public DateTimeOffset? ExpiresAt { get; init; }
 
+    /// <summary>
+    /// Optional OAuth scope granted by the token endpoint. It is stored with the token so a later
+    /// refresh can retain it, but it is not secret and does not by itself keep a record alive.
+    /// </summary>
+    public string? Scope { get; init; }
+
     /// <summary>CalDAV password or app password.</summary>
     public string? Password { get; init; }
 
@@ -64,7 +70,7 @@ public sealed record ProviderSecret
     public override string ToString() =>
         $"ProviderSecret {{ AccessToken = {Redact(AccessToken)}, RefreshToken = {Redact(RefreshToken)}, " +
         $"Password = {Redact(Password)}, Resource = {Redact(Resource)}, " +
-        $"ExpiresAt = {ExpiresAt?.ToString("O") ?? "(none)"} }}";
+        $"ExpiresAt = {ExpiresAt?.ToString("O") ?? "(none)"}, Scope = {Scope ?? "(none)"} }}";
 
     private static string Redact(string? value) => string.IsNullOrEmpty(value) ? "(none)" : "(redacted)";
 }
